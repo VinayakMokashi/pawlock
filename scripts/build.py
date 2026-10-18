@@ -61,7 +61,8 @@ def archive(product: Path) -> Path:
     base = ROOT / "dist" / f"PawLock-{__version__}-{os_name()}-{machine()}"
     if os_name() == "macos":
         # ditto keeps the app bundle's symlinks and code signature intact.
-        target = base.with_suffix(".zip")
+        # (Not base.with_suffix(): the version's dots would be eaten as a suffix.)
+        target = Path(str(base) + ".zip")
         subprocess.check_call(["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", str(product), str(target)])
     elif os_name() == "linux":
         target = Path(str(base) + ".tar.gz")
