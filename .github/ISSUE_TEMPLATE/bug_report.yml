@@ -1,0 +1,49 @@
+name: 🐞 Bug report
+description: Something doesn't work (or a cat got through / you got locked out)
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please **never paste anything you typed**. PawLock's logs don't contain keystrokes, so the log excerpt is safe to share.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead? What was the cat doing?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start PawLock
+        2. ...
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `pawlock --doctor`
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Relevant lines from pawlock.log
+      description: Tray → "Open log folder" (or `pawlock --where`).
+      render: text
+  - type: dropdown
+    id: install
+    attributes:
+      label: How do you run PawLock?
+      options:
+        - Downloaded app (PawLock.exe / PawLock.app / PawLock)
+        - From source (python -m pawlock)
+    validations:
+      required: true
+  - type: input
+    id: keyboard
+    attributes:
+      label: Keyboard / trackpad
+      placeholder: e.g. built-in laptop keyboard, Logitech MX Keys, Magic Trackpad

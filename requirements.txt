@@ -1,0 +1,19 @@
+# Runtime dependencies for PawLock.
+#   pip install -r requirements.txt
+
+# Global keyboard/mouse hooks with per-event suppression (Windows, macOS, X11).
+# On macOS this also installs pyobjc-framework-Quartz/ApplicationServices; on
+# Linux python-xlib and evdev.
+pynput>=1.7.7
+
+# System tray / menu-bar icon.
+pystray>=0.19.5
+
+# Draws the paw icons for the tray and the on-screen banner.
+Pillow>=10.0
+
+# Safe single-instance detection and the `pawlock --stop` kill switch.
+psutil>=5.9
+
+# tkinter (the on-screen banner) ships with Python on Windows and macOS.
+# On Debian/Ubuntu install it with:  sudo apt install python3-tk

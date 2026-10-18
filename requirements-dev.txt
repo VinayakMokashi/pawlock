@@ -1,0 +1,5 @@
+# Everything needed to test, lint and package PawLock.
+-r requirements.txt
+pytest>=8
+ruff>=0.6
+pyinstaller>=6.10

@@ -1,0 +1,71 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pawlock"
+dynamic = ["version"]
+description = "Cat-proof your computer: lock the keyboard and trackpad when a cat walks, sits or sleeps on them."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Vinayak Mokashi" }]
+keywords = ["cat", "keyboard", "lock", "input", "pynput", "tray", "accessibility"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Win32 (MS Windows)",
+    "Environment :: MacOS X",
+    "Environment :: X11 Applications",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Desktop Environment",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "pynput>=1.7.7",
+    "pystray>=0.19.5",
+    "Pillow>=10.0",
+    "psutil>=5.9",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6", "pyinstaller>=6.10"]
+
+[project.urls]
+Homepage = "https://github.com/VinayakMokashi/pawlock"
+Issues = "https://github.com/VinayakMokashi/pawlock/issues"
+
+[project.scripts]
+pawlock = "pawlock.cli:main"
+
+[project.gui-scripts]
+# On Windows this launcher starts without a console window.
+pawlockw = "pawlock.cli:main"
+
+[tool.setuptools]
+packages = ["pawlock", "pawlock.backends", "pawlock.feedback"]
+
+[tool.setuptools.dynamic]
+version = { attr = "pawlock.__version__" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM"]
+ignore = [
+    "UP006", "UP007", "UP035", "UP045",  # keep typing.List/Optional for Python 3.9
+    "SIM105",                            # explicit try/except/pass reads clearer in safety code
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]

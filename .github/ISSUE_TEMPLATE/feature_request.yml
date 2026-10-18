@@ -1,0 +1,19 @@
+name: 💡 Feature request
+description: An idea to make PawLock better at stopping cats (or nicer to humans)
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      placeholder: My cat has learned to ...
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered

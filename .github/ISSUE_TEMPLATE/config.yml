@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 🆘 Locked out right now?
+    url: https://github.com/VinayakMokashi/pawlock/blob/main/docs/SAFETY.md#emergency-exits-by-operating-system
+    about: Emergency exits for Windows, macOS and Linux.
+  - name: 🔐 Security issue
+    url: https://github.com/VinayakMokashi/pawlock/security/advisories/new
+    about: Please report vulnerabilities privately.

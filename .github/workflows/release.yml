@@ -1,0 +1,97 @@
+name: Release
+
+# Builds standalone PawLock apps for Windows, macOS and Linux with PyInstaller.
+# Pushing a tag like v1.2.3 also publishes them as a GitHub Release.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows
+            os: windows-latest
+          - name: macos
+            os: macos-latest
+          - name: linux
+            os: ubuntu-22.04   # older glibc = runs on more distributions
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Check Tk is available (needed for the on-screen banner)
+        run: python -c "import tkinter; print('Tk', tkinter.TkVersion)"
+
+      - name: Test
+        run: pytest
+
+      - name: Build with PyInstaller
+        run: python scripts/build.py --archive
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pawlock-${{ matrix.name }}
+          path: |
+            dist/*.zip
+            dist/*.tar.gz
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Write release notes
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          python - <<'EOF'
+          import os, re
+          version = os.environ["TAG"].lstrip("v")
+          changelog = open("CHANGELOG.md", encoding="utf-8").read()
+          match = re.search(rf"## \[{re.escape(version)}\][^\n]*\n(.*?)(?=\n## \[|\n\[[^\]]+\]: |\Z)", changelog, re.S)
+          notes = match.group(1).strip() if match else "See CHANGELOG.md."
+          header = (
+              "## Download\n\n"
+              "| Your computer | File |\n|---|---|\n"
+              "| Windows 10/11 | `PawLock-" + version + "-windows-x64.zip` |\n"
+              "| Mac with Apple Silicon | `PawLock-" + version + "-macos-arm64.zip` |\n"
+              "| Linux (X11) | `PawLock-" + version + "-linux-x64.tar.gz` |\n\n"
+              "First time? Follow the [install guide](https://github.com/" + os.environ["GITHUB_REPOSITORY"]
+              + "#install-no-programming-needed). The apps are not code-signed, so Windows/macOS will ask you "
+              "to confirm the first launch.\n\n## What's new\n\n"
+          )
+          open("notes.md", "w", encoding="utf-8").write(header + notes + "\n")
+          EOF
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: PawLock ${{ github.ref_name }}
+          body_path: notes.md
+          files: artifacts/*

@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+
+# Tooling
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# PyInstaller output (the spec file itself is tracked)
+build/
+dist/
+
+# Local runtime data (when PAWLOCK_HOME points inside the repo)
+pawlock-home/
+*.log
+pawlock-report.txt
+
+# Editors / OS
+.vscode/
+.idea/
+.claude/
+.DS_Store
+Thumbs.db
