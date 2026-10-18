@@ -3,12 +3,28 @@
 from __future__ import annotations
 
 import abc
+import threading
+from typing import Any
 
 from ..engine import LockEngine
 
 
 class BackendError(RuntimeError):
     """Raised when the OS refuses to let us hook input (permissions, Wayland...)."""
+
+
+def wait_until_ready(listener: Any, timeout: float = 5.0) -> None:
+    """``listener.wait()`` with a time limit.
+
+    pynput's own ``wait()`` blocks forever if the hook thread dies before it
+    reports ready, which would freeze PawLock's startup. We wait on a helper
+    thread instead and give up after *timeout* seconds.
+    """
+    waiter = threading.Thread(target=listener.wait, name="hook-ready", daemon=True)
+    waiter.start()
+    waiter.join(timeout)
+    if waiter.is_alive():
+        raise BackendError(f"the input hook did not start within {timeout:g} seconds")
 
 
 class InputBackend(abc.ABC):

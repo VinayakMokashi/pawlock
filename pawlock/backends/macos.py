@@ -25,10 +25,11 @@ scrolling are all blocked.
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any, Optional
 
 from .. import keys
-from .base import BackendError, InputBackend
+from .base import BackendError, InputBackend, wait_until_ready
 
 log = logging.getLogger(__name__)
 
@@ -94,9 +95,12 @@ class MacBackend(InputBackend):
         self._mouse.name = "mouse-tap"
         self._keyboard.start()
         self._mouse.start()
-        self._keyboard.wait()
-        self._mouse.wait()
-        if not getattr(self._keyboard, "IS_TRUSTED", True):
+        wait_until_ready(self._keyboard)
+        wait_until_ready(self._mouse)
+        # Without Input Monitoring permission the tap can't be created: pynput
+        # reports "ready" and its thread ends straight away. Give it a moment.
+        time.sleep(0.3)
+        if not getattr(self._keyboard, "IS_TRUSTED", True) or not self.is_healthy():
             self.stop()
             raise BackendError(
                 "macOS has not allowed PawLock to monitor input yet. Open System Settings > "

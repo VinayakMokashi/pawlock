@@ -29,7 +29,7 @@ import threading
 from typing import Any, Optional
 
 from .. import keys
-from .base import BackendError, InputBackend
+from .base import BackendError, InputBackend, wait_until_ready
 
 log = logging.getLogger(__name__)
 
@@ -98,7 +98,7 @@ class SwapBackend(InputBackend):
         )
         self._keyboard.name = "keyboard-listener"
         self._keyboard.start()
-        self._keyboard.wait()
+        wait_until_ready(self._keyboard)
 
         # The mouse is only grabbed when lock_mouse is on; while unlocked we
         # still listen so the (optional) click-storm rule can work.
@@ -106,7 +106,7 @@ class SwapBackend(InputBackend):
         self._mouse = mouse.Listener(on_click=self._on_click, suppress=mouse_grab)
         self._mouse.name = "mouse-listener"
         self._mouse.start()
-        self._mouse.wait()
+        wait_until_ready(self._mouse)
         self._grabbing = grab
 
     def _stop_listeners(self) -> None:

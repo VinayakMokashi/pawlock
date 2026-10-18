@@ -30,7 +30,7 @@ import logging
 from typing import Any, Optional
 
 from .. import keys
-from .base import BackendError, InputBackend
+from .base import BackendError, InputBackend, wait_until_ready
 
 log = logging.getLogger(__name__)
 
@@ -88,8 +88,8 @@ class WindowsBackend(InputBackend):
         self._mouse.name = "mouse-hook"
         self._keyboard.start()
         self._mouse.start()
-        self._keyboard.wait()
-        self._mouse.wait()
+        wait_until_ready(self._keyboard)
+        wait_until_ready(self._mouse)
         if not self.is_healthy():
             self.stop()
             raise BackendError("Windows refused to install the input hooks")

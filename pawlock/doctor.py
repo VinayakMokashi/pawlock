@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Callable, List, Tuple
 
 from . import __version__, autostart, paths
+from .backends.base import wait_until_ready
 from .config import load_config
 from .instance import find_running
 
@@ -69,15 +70,15 @@ def _input_hooks() -> Tuple[str, str]:
     kb.start()
     ms.start()
     try:
-        kb.wait()
-        ms.wait()
+        wait_until_ready(kb)
+        wait_until_ready(ms)
         time.sleep(0.3)
         alive = kb.is_alive() and ms.is_alive()
         trusted = getattr(kb, "IS_TRUSTED", True)
     finally:
         kb.stop()
         ms.stop()
-    if sys.platform == "darwin" and not trusted:
+    if sys.platform == "darwin" and not (trusted and alive):
         return FAIL, (
             "macOS has not granted access. Enable PawLock (or your Terminal) under System "
             "Settings > Privacy & Security > Accessibility AND Input Monitoring"

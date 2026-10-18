@@ -26,9 +26,9 @@ jobs:
             os: ubuntu-22.04   # older glibc = runs on more distributions
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -46,7 +46,7 @@ jobs:
       - name: Build with PyInstaller
         run: python scripts/build.py --archive
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: pawlock-${{ matrix.name }}
           path: |
@@ -60,9 +60,9 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true
@@ -90,7 +90,7 @@ jobs:
           open("notes.md", "w", encoding="utf-8").write(header + notes + "\n")
           EOF
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           name: PawLock ${{ github.ref_name }}
           body_path: notes.md

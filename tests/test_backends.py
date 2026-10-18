@@ -1,14 +1,27 @@
 """Backend glue, tested with fake OS events (no hooks are installed)."""
 
+import threading
 from types import SimpleNamespace
 
 import pytest
 
 from pawlock.backends import macos, windows
+from pawlock.backends.base import BackendError, wait_until_ready
 from pawlock.backends.macos import MacBackend
 from pawlock.backends.windows import WindowsBackend
 
 from .conftest import quiet_detector
+
+
+def test_wait_until_ready_never_hangs():
+    ready = SimpleNamespace(wait=lambda: None)
+    wait_until_ready(ready)  # returns at once
+
+    never = threading.Event()
+    stuck = SimpleNamespace(wait=never.wait)  # a hook thread that died before "ready"
+    with pytest.raises(BackendError):
+        wait_until_ready(stuck, timeout=0.1)
+    never.set()
 
 
 class Suppressed(Exception):
