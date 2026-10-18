@@ -112,12 +112,30 @@ def test_chord_needs_multiple_rows():
     assert detection is not None and detection.rule == "chord"
 
 
-def test_click_storm_is_off_by_default_and_works_when_enabled():
-    assert all(CatDetector().on_click(i * 0.05) is None for i in range(50))
+def clicks(times):
+    detector = CatDetector(PRESETS["medium"])
+    return next((d for d in (detector.on_click(t) for t in times) if d is not None), None)
+
+
+def test_normal_clicking_is_not_a_click_storm():
+    double_clicks = [t for i in range(40) for t in (i * 0.8, i * 0.8 + 0.15)]
+    triple_clicks = [t for i in range(20) for t in (i * 1.5, i * 1.5 + 0.12, i * 1.5 + 0.24)]
+    brisk_clicking = [i * 0.25 for i in range(40)]  # 4 clicks/s for 10 s
+    for pattern in (double_clicks, triple_clicks, brisk_clicking):
+        assert clicks(pattern) is None
+
+
+def test_click_storm_is_caught():
+    detection = clicks([i * 0.14 for i in range(30)])  # ~7 clicks/s: kneading paws
+    assert detection is not None and detection.rule == "click_storm"
+
+
+def test_click_storm_presets():
+    assert PRESETS["low"].click_storm_clicks == 0  # off
+    assert PRESETS["medium"].click_storm_clicks == 15
     detector = quiet_detector(click_storm_clicks=10, click_storm_seconds=2.0)
     results = [detector.on_click(i * 0.1) for i in range(10)]
-    assert results[-1] is not None and results[-1].rule == "click_storm"
-    assert all(r is None for r in results[:-1])
+    assert results[-1] is not None and all(r is None for r in results[:-1])
 
 
 def test_auto_repeat_does_not_count_as_new_presses():

@@ -34,6 +34,7 @@ from typing import Callable, Dict, Optional
 
 from .detector import CatDetector, DetectorSettings
 from .hotkey import Hotkey, PhraseMatcher
+from .keys import is_modifier
 
 log = logging.getLogger(__name__)
 
@@ -46,6 +47,7 @@ REASON_STARTUP = "startup"    # start_locked / --lock / --practice
 REASON_TIMEOUT = "timeout"    # max_lock_minutes reached
 REASON_SAFETY = "safety"      # watchdog / crash guard / internal error
 REASON_SHUTDOWN = "shutdown"
+REASON_AWAY = "away"          # away mode: no human input for a while
 
 
 @dataclass(frozen=True)
@@ -56,7 +58,21 @@ class StateChange:
     reason: str
     detail: str = ""
     dry_run: bool = False
+    #: On unlock: what was blocked while locked ("" if nothing was).
+    summary: str = ""
     at: float = field(default_factory=time.time)
+
+
+def _plural(count: int, word: str, plural: str) -> str:
+    return f"{count} {word if count == 1 else plural}"
+
+
+def _duration(seconds: float) -> str:
+    """``600 -> "10 minutes"``, ``90 -> "1.5 minutes"``, ``30 -> "30 seconds"``."""
+    if seconds >= 60:
+        minutes = round(seconds / 60, 1)
+        return f"{minutes:g} minute" + ("" if minutes == 1 else "s")
+    return f"{seconds:g} seconds"
 
 
 class LockEngine:
@@ -80,6 +96,13 @@ class LockEngine:
         were just pressing don't immediately re-lock the machine.
     dry_run:
         Go through all the motions but never actually swallow anything.
+    away_seconds:
+        Away mode: lock after this many seconds without any keyboard or mouse
+        input (``0`` disables it).
+    idle_source:
+        Optional callable returning the operating system's own idle time in
+        seconds (or ``None``). It sees input our hooks can't, such as typing
+        into administrator windows, so away mode won't lock while you work.
     on_change:
         Called with a :class:`StateChange` after every transition. It runs
         inside the input hook, so it must return immediately.
@@ -98,12 +121,16 @@ class LockEngine:
         stale_key_seconds: float = 10.0,
         cooldown_seconds: float = 5.0,
         dry_run: bool = False,
+        away_seconds: float = 0.0,
+        idle_source: Optional[Callable[[], Optional[float]]] = None,
         on_change: Optional[Callable[[StateChange], None]] = None,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._mutex = threading.RLock()
         self._clock = clock
         self._on_change = on_change
+        self._idle_source = idle_source
+        self.away_seconds = away_seconds
 
         self.hotkey = hotkey
         self._phrase = PhraseMatcher(unlock_phrase)
@@ -124,6 +151,18 @@ class LockEngine:
         self._key_delivered: Dict[str, bool] = {}     # key -> did its press reach the OS?
         self._button_delivered: Dict[str, bool] = {}  # mouse button -> same question
 
+        # Away mode: when we last saw input, and whether away mode may fire
+        # (it re-arms only after fresh activity, so it fires once per absence).
+        self._last_input = clock()
+        self._away_armed = True
+
+        # What was blocked during the current lock (for the unlock summary).
+        # Only counts, never which keys.
+        self._last_blocked: Optional[float] = None
+        self._blocked_keys = 0
+        self._blocked_clicks = 0
+        self._blocked_scrolls = 0
+
     # ------------------------------------------------------------------
     # Read-only state
     # ------------------------------------------------------------------
@@ -136,6 +175,27 @@ class LockEngine:
     def locked_since(self) -> Optional[float]:
         """Monotonic time the current lock began (``None`` while unlocked)."""
         return self._locked_since
+
+    @property
+    def last_blocked_at(self) -> Optional[float]:
+        """Monotonic time something was last swallowed because we're locked."""
+        return self._last_blocked
+
+    def idle_seconds(self) -> float:
+        """How long nobody has touched the keyboard or mouse.
+
+        Uses the smaller of our own measurement and the OS's, so away mode
+        only fires when *both* agree that nobody is there.
+        """
+        idle = self._clock() - self._last_input
+        if self._idle_source is not None:
+            try:
+                system_idle = self._idle_source()
+            except Exception:  # pragma: no cover - defensive
+                system_idle = None
+            if system_idle is not None:
+                idle = min(idle, system_idle)
+        return max(0.0, idle)
 
     @property
     def unlock_phrase(self) -> str:
@@ -178,7 +238,7 @@ class LockEngine:
         self._locked = False
         self._locked_since = None
         if was_locked:
-            self._notify(StateChange(False, reason, detail, self.dry_run))
+            self._notify(StateChange(False, reason, detail, self.dry_run, self._blocked_summary()))
 
     def reconfigure(
         self,
@@ -189,9 +249,12 @@ class LockEngine:
         cooldown_seconds: Optional[float] = None,
         stale_key_seconds: Optional[float] = None,
         detector_settings: Optional[DetectorSettings] = None,
+        away_seconds: Optional[float] = None,
     ) -> None:
         """Apply new settings without restarting (tray: "Reload settings")."""
         with self._mutex:
+            if away_seconds is not None:
+                self.away_seconds = away_seconds
             if detector_settings is not None and self._detector is not None:
                 self._detector.update_settings(detector_settings)
             if hotkey is not None:
@@ -220,19 +283,37 @@ class LockEngine:
             return False
 
     def handle_mouse_motion(self) -> bool:
-        """Mouse move / drag / scroll / trackpad swipe; return True to swallow.
+        """Mouse or trackpad pointer movement / drag; return True to swallow.
 
         This is the hottest path (a gaming mouse reports 1000 moves a second),
-        so it reads two attributes and nothing else.
+        so it skips the mutex and does nothing but a few attribute reads and
+        writes.
         """
-        return self._locked and self.lock_mouse and not self.dry_run
+        now = self._clock()
+        self._last_input = now
+        if self._locked and self.lock_mouse:
+            self._last_blocked = now
+            return not self.dry_run
+        return False
+
+    def handle_mouse_scroll(self) -> bool:
+        """Mouse wheel or two-finger trackpad scroll; return True to swallow."""
+        swallow = self.handle_mouse_motion()
+        if self._locked and self.lock_mouse:
+            self._blocked_scrolls += 1
+        return swallow
 
     def handle_other_key_event(self) -> bool:
         """Keyboard events that aren't a plain key (media keys, brightness...).
 
         They can't take part in the hotkey, so simply: swallow while locked.
         """
-        return self._locked and not self.dry_run
+        now = self._clock()
+        self._last_input = now
+        if self._locked:
+            self._last_blocked = now
+            return not self.dry_run
+        return False
 
     def handle_mouse_button(self, button: str, pressed: bool) -> bool:
         """Mouse or trackpad click; return True to swallow."""
@@ -245,7 +326,7 @@ class LockEngine:
             return False
 
     def tick(self) -> None:
-        """Periodic housekeeping (time-based detector rules). Called ~4x/second."""
+        """Periodic housekeeping: time-based detector rules and away mode (~4x/s)."""
         try:
             with self._mutex:
                 now = self._clock()
@@ -254,6 +335,8 @@ class LockEngine:
                     detection = self._detector.tick(now)
                     if detection is not None:
                         self._set_locked(True, REASON_AUTO, detection.reason)
+                if not self._locked:
+                    self._check_away()
         except Exception:  # pragma: no cover - defensive
             log.exception("Internal error in engine tick")
 
@@ -269,6 +352,7 @@ class LockEngine:
 
     def _handle_key(self, key: str, pressed: bool) -> bool:
         now = self._clock()
+        self._last_input = now
         self._expire_stale(now)
 
         if not pressed:
@@ -286,6 +370,7 @@ class LockEngine:
                 if detection is not None:
                     self._set_locked(True, REASON_AUTO, detection.reason)
             if self._locked:
+                self._last_blocked = now
                 return self._swallow(True)
             return self._swallow(not self._key_delivered.get(key, True))
 
@@ -297,7 +382,12 @@ class LockEngine:
             return self._swallow(True)
 
         if self._locked:
+            self._last_blocked = now
+            if not is_modifier(key):
+                self._blocked_keys += 1
             if self._phrase.feed(key):
+                # The phrase itself isn't something "the cat typed".
+                self._blocked_keys = max(0, self._blocked_keys - len(self._phrase.phrase))
                 self._set_locked(False, REASON_PHRASE)
             self._key_delivered[key] = False
             return self._swallow(True)
@@ -323,18 +413,21 @@ class LockEngine:
         return self._swallow(delivered is False)
 
     def _handle_button(self, button: str, pressed: bool) -> bool:
+        now = self._clock()
+        self._last_input = now
         if not pressed:
             delivered = self._button_delivered.pop(button, None)
             return self._swallow(delivered is False)
 
         swallow = self._locked and self.lock_mouse
-        if not self._locked:
-            now = self._clock()
-            if self._detection_active(now):
-                detection = self._detector.on_click(now)
-                if detection is not None:
-                    self._set_locked(True, REASON_AUTO, detection.reason)
-                    swallow = self.lock_mouse
+        if swallow:
+            self._last_blocked = now
+            self._blocked_clicks += 1
+        if not self._locked and self._detection_active(now):
+            detection = self._detector.on_click(now)
+            if detection is not None:
+                self._set_locked(True, REASON_AUTO, detection.reason)
+                swallow = self.lock_mouse
         self._button_delivered[button] = not swallow
         return self._swallow(swallow)
 
@@ -347,20 +440,50 @@ class LockEngine:
                 if self._detector is not None:
                     self._detector.forget(key)
 
+    def _check_away(self) -> None:
+        """Away mode: lock once nobody has touched anything for ``away_seconds``."""
+        if self.away_seconds <= 0:
+            return
+        if self.idle_seconds() < self.away_seconds:
+            self._away_armed = True  # Someone was here recently.
+            return
+        if self._away_armed:
+            # Fire once per absence. Without this, a dry-run "lock" that ends
+            # on its own would immediately re-trigger.
+            self._away_armed = False
+            self._set_locked(True, REASON_AWAY, f"no keyboard or mouse activity for {_duration(self.away_seconds)}")
+
+    def _blocked_summary(self) -> str:
+        parts = []
+        if self._blocked_keys:
+            parts.append(_plural(self._blocked_keys, "key press", "key presses"))
+        if self._blocked_clicks:
+            parts.append(_plural(self._blocked_clicks, "click", "clicks"))
+        if self._blocked_scrolls:
+            parts.append("some scrolling")  # Trackpads send dozens per swipe: no count.
+        if not parts:
+            return ""
+        text = parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " and " + parts[-1]
+        return ("Would have blocked " if self.dry_run else "Blocked ") + text + " while locked."
+
     def _set_locked(self, locked: bool, reason: str, detail: str = "") -> None:
         if locked == self._locked:
             return
         now = self._clock()
         self._locked = locked
+        summary = ""
         if locked:
             self._locked_since = now
             self._phrase.reset()
+            self._last_blocked = None
+            self._blocked_keys = self._blocked_clicks = self._blocked_scrolls = 0
         else:
             self._locked_since = None
             self._cooldown_until = now + self.cooldown_seconds
+            summary = self._blocked_summary()
         if self._detector is not None:
             self._detector.reset()
-        self._notify(StateChange(locked, reason, detail, self.dry_run))
+        self._notify(StateChange(locked, reason, detail, self.dry_run, summary))
 
     def _notify(self, change: StateChange) -> None:
         if self._on_change is None:

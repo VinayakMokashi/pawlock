@@ -4,6 +4,31 @@ All notable changes to PawLock are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] - 2026-10-18
+
+Protection for when you're in another room, and for the trackpad.
+
+### Added
+
+- **Away mode** (on by default): locks by itself after 10 minutes with nobody at the
+  computer, so a cat that turns up later finds it already locked. Silent (tray icon only);
+  the banner appears as soon as someone touches the keyboard or trackpad. Uses the OS idle
+  timer (Windows, macOS, X11) as well as PawLock's own hooks so it never locks while you
+  work. New settings `away_lock` / `away_lock_minutes`, tray checkbox
+  *Lock when I'm away*, and `--away-minutes`.
+- **"While you were away" summary** on unlock: e.g. *Blocked 214 key presses, 37 clicks and
+  some scrolling while locked.* (counts only, never which keys).
+- `--doctor` reports away mode and whether the OS idle timer is available.
+
+### Changed
+
+- The **click storm** rule (trackpad/mouse kneading) is now on by default: 15 clicks within
+  2.5 s on `medium`, 10 within 2 s on `high`, off on `low`. Double-clicks, triple-clicks and
+  brisk clicking stay well below it.
+- Scrolling (mouse wheel and two-finger trackpad scrolls) is reported separately from
+  pointer movement on every platform; the Linux backend now also watches pointer movement
+  so away mode sees mouse activity there.
+
 ## [1.0.0] - 2026-10-18
 
 First public release.
@@ -34,4 +59,5 @@ First public release.
 - Documentation: architecture, detection, safety, configuration, packaging,
   troubleshooting.
 
+[1.1.0]: https://github.com/VinayakMokashi/pawlock/releases/tag/v1.1.0
 [1.0.0]: https://github.com/VinayakMokashi/pawlock/releases/tag/v1.0.0

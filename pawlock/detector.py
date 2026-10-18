@@ -37,8 +37,11 @@ A cat produces input that is physically awkward for a person:
    The window triggers when ``paw contact`` is present and the total number
    of signals reaches the sensitivity threshold.
 
-5. **Click storm** (off by default). Lots of mouse clicks in a short time,
-   for cats that prefer the trackpad.
+5. **Click storm.** Lots of mouse/trackpad clicks in a short time (default
+   15 within 2.5 s, far beyond double- and triple-clicks), for cats that
+   knead or bat the trackpad. A cat that simply *walks* across a trackpad
+   produces input that looks too human to judge safely; away mode covers
+   that case (see ``engine.py``).
 
 All thresholds live in :class:`DetectorSettings`, with three presets
 (``low``, ``medium``, ``high``) in :data:`PRESETS`.
@@ -94,8 +97,8 @@ class DetectorSettings:
     mash_window_keys: int = 12        # Rule 4: presses examined together ...
     mash_window_seconds: float = 3.0  # ... and the time span they must fit in
     mash_signals_needed: int = 3      # ... signals needed (paw contact included)
-    click_storm_clicks: int = 0       # Rule 5: clicks ... (0 = off)
-    click_storm_seconds: float = 2.0  # ... within this many seconds
+    click_storm_clicks: int = 15      # Rule 5: clicks ...
+    click_storm_seconds: float = 2.5  # ... within this many seconds
 
     def with_overrides(self, overrides: Dict[str, float]) -> DetectorSettings:
         """Copy with some fields replaced (used for the advanced config section)."""
@@ -120,12 +123,13 @@ PRESETS: Dict[str, DetectorSettings] = {
     "low": DetectorSettings(
         chord_keys=6, chord_min_rows=3, sit_keys=4, sit_seconds=2.5,
         long_hold_seconds=0, mash_window_keys=16, mash_signals_needed=4,
+        click_storm_clicks=0,
     ),
     "medium": DetectorSettings(),
     "high": DetectorSettings(
         chord_keys=5, chord_min_rows=2, sit_keys=3, sit_seconds=1.0,
         long_hold_seconds=8.0, mash_window_keys=10, mash_signals_needed=2,
-        click_storm_clicks=15,
+        click_storm_clicks=10, click_storm_seconds=2.0,
     ),
 }
 

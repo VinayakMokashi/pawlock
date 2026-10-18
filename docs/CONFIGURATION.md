@@ -33,6 +33,13 @@ it. Keys starting with `_` are ignored, so you can leave yourself notes.
 | `start_locked` | `false` | bool | Lock as soon as PawLock starts. |
 | `max_lock_minutes` | `0` | 0-1440 | Auto-unlock after this long. `0` = never. |
 
+### Away mode
+
+| Key | Default | Allowed | Description |
+|---|---|---|---|
+| `away_lock` | `true` | bool | Lock by itself when nobody has used the keyboard, mouse or trackpad for `away_lock_minutes` (also a tray checkbox). The lock is silent: tray icon only, and the banner appears when someone touches the computer. |
+| `away_lock_minutes` | `10` | 0.5-1440 | Minutes of inactivity before away mode locks. Measured with PawLock's hooks *and* the OS idle timer; both must agree. |
+
 ### Cat detection
 
 | Key | Default | Allowed | Description |
@@ -54,8 +61,8 @@ it. Keys starting with `_` are ignored, so you can leave yourself notes.
 | `mash_window_keys` | 12 | Key presses examined together for *mashing* |
 | `mash_window_seconds` | 3 | …that must fit in this time span |
 | `mash_signals_needed` | 3 | Signals required (paw contact always required) |
-| `click_storm_clicks` | 0 | Clicks for the *click storm* rule (0 = off) |
-| `click_storm_seconds` | 2 | …within this many seconds |
+| `click_storm_clicks` | 15 | Mouse/trackpad clicks for the *click storm* rule |
+| `click_storm_seconds` | 2.5 | …within this many seconds |
 
 ### Feedback
 
@@ -87,6 +94,8 @@ it. Keys starting with `_` are ignored, so you can leave yourself notes.
   "lock_mouse": true,
   "start_locked": false,
   "max_lock_minutes": 0,
+  "away_lock": true,
+  "away_lock_minutes": 10.0,
   "auto_detect": true,
   "sensitivity": "medium",
   "cooldown_seconds": 5.0,
@@ -124,9 +133,16 @@ it. Keys starting with `_` are ignored, so you can leave yourself notes.
 ```json
 {
   "sensitivity": "high",
-  "detector_overrides": { "click_storm_clicks": 10 },
+  "detector_overrides": { "click_storm_clicks": 8 },
+  "away_lock_minutes": 3,
   "max_lock_minutes": 120
 }
+```
+
+**Long films, short absences.** Lock after 30 minutes away instead of 10:
+
+```json
+{ "away_lock_minutes": 30 }
 ```
 
 **Personal unlock word:**
@@ -137,7 +153,7 @@ it. Keys starting with `_` are ignored, so you can leave yourself notes.
 
 ## Command-line overrides
 
-These apply to one run only and are never saved: `--sensitivity`, `--max-lock-minutes`,
+These apply to one run only and are never saved: `--sensitivity`, `--max-lock-minutes`, `--away-minutes`,
 `--no-auto-detect`, `--no-tray`, `--no-overlay`, `--no-sound`, `--lock`, `--log-level`,
 `--config FILE`. See `pawlock --help`.
 

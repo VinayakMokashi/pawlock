@@ -67,6 +67,11 @@ class TrayIcon:
                 checked=lambda _: a.auto_detect_enabled(),
             ),
             item(
+                lambda _: a.away_text(),
+                self._safe(lambda: a.set_away_lock(not a.away_lock_enabled())),
+                checked=lambda _: a.away_lock_enabled(),
+            ),
+            item(
                 "Sound effects",
                 self._safe(lambda: a.set_sound(not a.sound_enabled())),
                 checked=lambda _: a.sound_enabled(),

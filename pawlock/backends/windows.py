@@ -139,9 +139,11 @@ class WindowsBackend(InputBackend):
         elif msg in (WM_XBUTTONDOWN, WM_XBUTTONUP):
             button = f"x{(data.mouseData >> 16) & 0xFFFF}"
             swallow = self.engine.handle_mouse_button(button, msg == WM_XBUTTONDOWN)
+        elif msg in (WM_MOUSEWHEEL, WM_MOUSEHWHEEL):
+            # Wheel, and two-finger trackpad scrolling / pinch-zoom.
+            swallow = self.engine.handle_mouse_scroll()
         else:
-            # Moves, wheel and horizontal wheel (two-finger trackpad scrolls).
-            swallow = self.engine.handle_mouse_motion()
+            swallow = self.engine.handle_mouse_motion()  # pointer movement
         if swallow:
             self._suppress(self._mouse)
         return False

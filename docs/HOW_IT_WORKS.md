@@ -80,6 +80,8 @@ Everything left of the queue runs inside the OS hook and takes microseconds.
 | `_held` | Keys currently down → last time we heard from them (for exact hotkey matching and stale-key expiry) |
 | `_key_delivered` / `_button_delivered` | Did the *press* of this key/button reach the OS? (balanced suppression) |
 | `_cooldown_until` | Ignore the detector briefly after an unlock |
+| `_last_input`, `_away_armed` | Away mode: when anyone last touched anything, and whether away mode may fire again |
+| `_blocked_keys` / `_blocked_clicks` / `_blocked_scrolls`, `_last_blocked` | What was swallowed during this lock (counts only, never which keys) for the unlock summary, and when, so the app can show the banner during a silent away-mode lock |
 
 Decision order for a **fresh key press**:
 
@@ -90,6 +92,15 @@ Decision order for a **fresh key press**:
 
 **Auto-repeat** presses (a key already in `_held`) follow the fate of the original press.
 **Releases** follow the rule below.
+
+**Away mode** runs in `tick()` (4× a second on the controller thread). It computes the idle
+time as the *smaller* of PawLock's own measurement (every hook event updates `_last_input`)
+and the OS idle timer from `pawlock/idle.py` (`GetLastInputInfo`, Quartz,
+or the X11 screensaver extension). It locks only when both agree nobody is there, so input
+PawLock can't see (an administrator window on Windows) still counts as "someone is here".
+It fires once per absence and re-arms after fresh activity. Away-mode locks are *quiet*:
+the controller shows the banner only when `last_blocked_at` shows someone touched the
+computer.
 
 Two escape hatches skip the mutex entirely, so they work even if a thread holding it is
 stuck: `handle_mouse_motion()` (the hottest path, reading two attributes) and

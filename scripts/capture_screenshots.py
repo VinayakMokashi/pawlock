@@ -19,7 +19,7 @@ sys.path.insert(0, str(ROOT))
 from PIL import ImageGrab  # noqa: E402
 
 from pawlock.app import _enable_dpi_awareness  # noqa: E402
-from pawlock.engine import REASON_AUTO, REASON_HOTKEY, StateChange  # noqa: E402
+from pawlock.engine import REASON_AUTO, REASON_AWAY, REASON_HOTKEY, StateChange  # noqa: E402
 from pawlock.feedback import describe, overlay  # noqa: E402
 from pawlock.hotkey import Hotkey  # noqa: E402
 
@@ -33,6 +33,16 @@ SHOTS = {
     ),
     "banner-locked": (describe(StateChange(True, REASON_HOTKEY), HOTKEY, "unlock"), "locked"),
     "banner-unlocked": (describe(StateChange(False, REASON_HOTKEY), HOTKEY, "unlock"), "unlocked"),
+    "banner-away": (
+        describe(StateChange(True, REASON_AWAY, "no keyboard or mouse activity for 10 minutes"), HOTKEY, "unlock"),
+        "locked",
+    ),
+    "banner-welcome-back": (
+        describe(StateChange(False, REASON_HOTKEY,
+                             summary="Blocked 214 key presses, 37 clicks and some scrolling while locked."),
+                 HOTKEY, "unlock"),
+        "unlocked",
+    ),
     "banner-dry-run": (
         describe(StateChange(True, REASON_AUTO, "5 keys pressed at once across 2 keyboard rows", dry_run=True),
                  HOTKEY, "unlock"),

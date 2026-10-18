@@ -221,3 +221,112 @@ def test_reconfigure_hotkey(make_engine, clock):
     engine.reconfigure(hotkey=Hotkey.parse("ctrl+alt+k"))
     press_sequence(engine, clock, [("ctrl_l", True), ("alt_l", True), ("k", True)])
     assert engine.locked
+
+
+# ---------------------------------------------------------------------------
+# Away mode
+# ---------------------------------------------------------------------------
+
+def test_away_mode_locks_after_inactivity(make_engine, clock, changes):
+    from pawlock.engine import REASON_AWAY
+
+    engine = make_engine(away_seconds=600)
+    clock.advance(599)
+    engine.tick()
+    assert not engine.locked
+    clock.advance(2)
+    engine.tick()
+    assert engine.locked
+    assert changes[-1].reason == REASON_AWAY
+    assert changes[-1].detail == "no keyboard or mouse activity for 10 minutes"
+
+
+def test_any_activity_resets_the_away_timer(make_engine, clock):
+    engine = make_engine(away_seconds=60)
+    for handler in (lambda: engine.handle_key("a", True), engine.handle_mouse_motion,
+                    engine.handle_mouse_scroll, lambda: engine.handle_mouse_button("left", True)):
+        clock.advance(50)
+        handler()
+        engine.tick()
+        assert not engine.locked
+    clock.advance(61)
+    engine.tick()
+    assert engine.locked
+
+
+def test_away_mode_fires_once_per_absence(make_engine, clock):
+    engine = make_engine(away_seconds=60, dry_run=True)
+    clock.advance(61)
+    engine.tick()
+    assert engine.locked
+    engine.unlock()            # e.g. the dry-run "lock" ending by itself
+    clock.advance(30)
+    engine.tick()
+    assert not engine.locked   # nobody came back: don't fire again
+    engine.handle_mouse_motion()
+    engine.tick()              # activity re-arms it...
+    clock.advance(61)
+    engine.tick()
+    assert engine.locked       # ...for the next absence
+
+
+def test_away_mode_respects_the_os_idle_timer(make_engine, clock):
+    # Typing in an admin window: our hooks see nothing, but the OS does.
+    engine = make_engine(away_seconds=60, idle_source=lambda: 2.0)
+    clock.advance(600)
+    engine.tick()
+    assert not engine.locked
+    # A broken OS timer can't cause a false lock either: the smaller value wins.
+    engine = make_engine(away_seconds=60, idle_source=lambda: 10_000.0)
+    clock.advance(30)
+    engine.tick()
+    assert not engine.locked
+
+
+def test_away_mode_off(make_engine, clock):
+    engine = make_engine(away_seconds=0)
+    clock.advance(10_000)
+    engine.tick()
+    assert not engine.locked
+
+
+# ---------------------------------------------------------------------------
+# "What was blocked" summary
+# ---------------------------------------------------------------------------
+
+def test_unlock_summary_counts_what_was_blocked(make_engine, clock, changes):
+    engine = make_engine()
+    engine.lock()
+    assert engine.last_blocked_at is None
+    press_sequence(engine, clock, tap("a") + tap("b") + tap("shift_l"))
+    engine.handle_mouse_button("left", True)
+    engine.handle_mouse_button("left", False)
+    engine.handle_mouse_button("right", True)
+    engine.handle_mouse_scroll()
+    engine.handle_mouse_motion()
+    assert engine.last_blocked_at is not None
+    press_sequence(engine, clock, hotkey_steps())  # the hotkey itself isn't counted
+    assert not engine.locked
+    assert changes[-1].summary == "Blocked 2 key presses, 2 clicks and some scrolling while locked."
+
+
+def test_unlock_summary_ignores_the_unlock_phrase(make_engine, clock, changes):
+    engine = make_engine()
+    engine.lock()
+    steps = tap("x")
+    for ch in "unlock":
+        steps += tap(ch)
+    press_sequence(engine, clock, steps)
+    assert not engine.locked
+    assert changes[-1].summary == "Blocked 1 key press while locked."
+
+
+def test_no_summary_when_nothing_was_blocked(make_engine, clock, changes):
+    engine = make_engine()
+    engine.lock()
+    engine.unlock()
+    assert changes[-1].summary == ""
+    engine.lock()
+    engine.handle_key("z", True)
+    engine.force_unlock()
+    assert changes[-1].summary == "Blocked 1 key press while locked."

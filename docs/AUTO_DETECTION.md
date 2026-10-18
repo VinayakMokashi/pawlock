@@ -8,6 +8,7 @@ the numbers behind the presets, how they were measured, and how to tune them.
 - [The mashing score](#the-mashing-score)
 - [Presets](#presets)
 - [Benchmarks](#benchmarks)
+- [Trackpad and mouse](#trackpad-and-mouse)
 - [Tuning](#tuning)
 - [Known false positives](#known-false-positives)
 - [Privacy](#privacy)
@@ -33,7 +34,7 @@ Each rule can fire on its own. Values are for the default **medium** preset.
 | 2 | **Sitting** | ≥ 3 keys have each been held for ≥ 1.5 s | People hold one key (Backspace, an arrow), not three random ones |
 | 3 | **Long hold** | one typing key held ≥ 20 s | A toe bean parked on a key. Editing/arrow keys are exempt |
 | 4 | **Mashing** | the last 12 presses fit in 3 s **and** show *paw contact* + at least 2 more signals | Walking cats; see below |
-| 5 | **Click storm** | ≥ N clicks in 2 s (**off** in medium) | Kneading the trackpad |
+| 5 | **Click storm** | ≥ 15 mouse/trackpad clicks within 2.5 s | Kneading or batting the trackpad / mouse |
 
 Modifiers (Ctrl, Shift, Alt, Cmd/Win) are ignored by every rule.
 OS auto-repeat is recognised and never counted as new presses.
@@ -67,7 +68,7 @@ Key positions come from a model of a US keyboard with staggered rows (`keys.py`)
 | `long_hold_seconds` | off | **20 s** | 8 s |
 | `mash_window_keys` / `mash_window_seconds` | 16 / 3 s | **12 / 3 s** | 10 / 3 s |
 | `mash_signals_needed` | 4 | **3** | 2 |
-| `click_storm_clicks` / `click_storm_seconds` | off | **off** | 15 / 2 s |
+| `click_storm_clicks` / `click_storm_seconds` | off | **15 / 2.5 s** | 10 / 2 s |
 
 ## Benchmarks
 
@@ -112,6 +113,30 @@ and holds them, with OS auto-repeat on the last one.
 These are simulations, not real cats; real paws vary. If yours slips through or you get
 false locks, see [Tuning](#tuning) and please open an issue with your `--dry-run` log.
 
+## Trackpad and mouse
+
+While PawLock is locked, the trackpad and mouse are fully blocked: pointer movement,
+clicks, taps, drags and scrolling (two-finger scrolls included). Detecting a cat that uses
+*only* the trackpad is harder:
+
+| Cat behaviour | What PawLock sees | Detected? |
+|---|---|---|
+| Kneading / batting the trackpad or mouse | a burst of clicks | ✅ **click storm** (15+ in 2.5 s) |
+| Lying across a laptop (keys **and** trackpad) | keys held down | ✅ **paw chord / sitting** |
+| Walking over the trackpad | a pointer move and a tap or two | ❌ looks exactly like a person |
+| Lying on the trackpad only | usually nothing (the touchpad's palm rejection ignores it), sometimes stray taps | ❌ / partly |
+
+Normal clicking stays well below the click-storm threshold (tested in
+`tests/test_detector.py`): double-clicks, triple-clicks to select paragraphs, and brisk
+clicking at 4 clicks per second for 10 seconds never trigger it.
+
+For the cases that can't be detected safely, PawLock relies on **away mode**: after 10
+minutes with nobody at the computer it locks by itself, so a cat that arrives later finds
+it already locked. Away mode measures inactivity with PawLock's own hooks *and* the OS idle
+timer (`GetLastInputInfo` on Windows, `CGEventSourceSecondsSinceLastEventType` on macOS,
+the X11 screensaver extension on Linux) and only fires when both agree, so it doesn't lock
+while you work in windows PawLock's hooks can't see.
+
 ## Tuning
 
 1. **Watch first.** Run `pawlock --dry-run`. Nothing is ever blocked; when the detector
@@ -143,6 +168,8 @@ false locks, see [Tuning](#tuning) and please open an issue with your `--dry-run
 |---|---|---|
 | Games that hold 3+ letter keys (W+A+E) for over 1.5 s | sitting | Untick *Detect cats automatically* while gaming, or `"sit_seconds": 4` |
 | Push-to-talk on a letter key, talking > 20 s | long hold | `"long_hold_seconds": 0` or a PTT key like Caps Lock / a mouse button |
+| Clicker games, rapid-fire clicking | click storm | `"click_storm_clicks": 0`, or untick detection while playing |
+| Watching a video without touching anything for 10 min | away mode (not the detector) | It's silent; press the hotkey when you need input, or raise `away_lock_minutes` |
 | Deliberate key-mashing ("asdfjkl;" rage) | mashing | Working as intended 🙂 |
 | 160+ WPM typists on `high` | chord / mash | Use `medium` |
 

@@ -10,6 +10,7 @@ Then look for your symptom below. The log (tray → *Open log folder*, or
 `pawlock --where`) usually says exactly what happened.
 
 - [I'm locked and the hotkey doesn't work](#im-locked-and-the-hotkey-doesnt-work)
+- [It locked while I was watching / reading](#it-locked-while-i-was-watching--reading)
 - [It locked while I was typing](#it-locked-while-i-was-typing)
 - [My cat got through](#my-cat-got-through)
 - [Windows](#windows)
@@ -28,6 +29,14 @@ Then look for your symptom below. The log (tray → *Open log folder*, or
    On Windows: **Ctrl + Alt + Del → Task Manager → PawLock → End task**.
 4. Afterwards, practise with `pawlock --practice` and consider a different `hotkey`.
 
+## It locked while I was watching / reading
+
+That's **away mode**: nobody touched the keyboard, mouse or trackpad for
+`away_lock_minutes` (default 10). The log says `LOCKED (away: no keyboard or mouse activity
+for 10 minutes)`. It's silent, so press the hotkey when you need input again. To make it
+wait longer, set `"away_lock_minutes": 30`; to turn it off, untick **Lock when I'm away**
+in the tray.
+
 ## It locked while I was typing
 
 - The log line says which rule fired, e.g.
@@ -43,8 +52,13 @@ Then look for your symptom below. The log (tray → *Open log folder*, or
 
 - A cat that walks across in one or two steps types a few characters before there's
   enough evidence. Try `"sensitivity": "high"`.
-- Trackpad cat? Enable the click-storm rule: `"detector_overrides": {"click_storm_clicks": 10}`.
+- Trackpad cat? A cat gently walking over a trackpad looks exactly like you using it, so
+  it can't be detected safely. Keep **away mode** on (and shorten `away_lock_minutes`), and
+  make the click-storm rule more sensitive: `"detector_overrides": {"click_storm_clicks": 8}`.
 - Lock manually before leaving the desk: click the tray paw, or press the hotkey.
+- **The cat typed on the Windows/macOS sign-in screen?** When the OS locks itself, its
+  sign-in screen takes over the keyboard and PawLock can't (and shouldn't) block it. Let
+  PawLock's away mode lock first by giving the OS screen lock a longer timeout.
 
 ## Windows
 

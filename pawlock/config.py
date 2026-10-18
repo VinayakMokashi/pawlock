@@ -35,6 +35,10 @@ class Config:
     start_locked: bool = False
     max_lock_minutes: float = 0.0          # 0 = no limit
 
+    # --- Away mode -------------------------------------------------------
+    away_lock: bool = True                 # lock when nobody has used the PC ...
+    away_lock_minutes: float = 10.0        # ... for this long
+
     # --- Cat detection ---------------------------------------------------
     auto_detect: bool = True
     sensitivity: str = "medium"            # low | medium | high
@@ -63,6 +67,10 @@ class Config:
 
     def detector_settings(self) -> DetectorSettings:
         return PRESETS[self.sensitivity].with_overrides(self.detector_overrides)
+
+    def away_seconds(self) -> float:
+        """Away-mode delay in seconds (0 when away mode is off)."""
+        return 60.0 * self.away_lock_minutes if self.away_lock else 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -114,6 +122,8 @@ VALIDATORS: Dict[str, Callable[[Any], Any]] = {
     "lock_mouse": _bool,
     "start_locked": _bool,
     "max_lock_minutes": _number(0, 24 * 60),
+    "away_lock": _bool,
+    "away_lock_minutes": _number(0.5, 24 * 60),
     "auto_detect": _bool,
     "sensitivity": _choice(SENSITIVITIES),
     "cooldown_seconds": _number(0, 600),

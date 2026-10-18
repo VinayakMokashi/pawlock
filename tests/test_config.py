@@ -75,3 +75,13 @@ def test_detector_settings_merge_preset_and_overrides():
     settings = config.detector_settings()
     assert settings.chord_keys == 9
     assert settings.sit_keys == PRESETS["low"].sit_keys
+
+
+def test_away_mode_settings():
+    config = Config()
+    assert config.away_lock is True and config.away_lock_minutes == 10
+    assert config.away_seconds() == 600
+    config, warnings = config_from_dict({"away_lock": False, "away_lock_minutes": 3})
+    assert warnings == [] and config.away_seconds() == 0
+    _, warnings = config_from_dict({"away_lock_minutes": 0})
+    assert len(warnings) == 1  # below the 0.5 minute minimum

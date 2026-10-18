@@ -101,9 +101,12 @@ class SwapBackend(InputBackend):
         wait_until_ready(self._keyboard)
 
         # The mouse is only grabbed when lock_mouse is on; while unlocked we
-        # still listen so the (optional) click-storm rule can work.
+        # still listen, for the click-storm rule and so away mode can tell
+        # that someone is using the mouse.
         mouse_grab = grab and self.engine.lock_mouse
-        self._mouse = mouse.Listener(on_click=self._on_click, suppress=mouse_grab)
+        self._mouse = mouse.Listener(
+            on_move=self._on_move, on_click=self._on_click, on_scroll=self._on_scroll, suppress=mouse_grab
+        )
         self._mouse.name = "mouse-listener"
         self._mouse.start()
         wait_until_ready(self._mouse)
@@ -132,3 +135,11 @@ class SwapBackend(InputBackend):
     def _on_click(self, x: int, y: int, button: Any, pressed: bool, injected: bool = False) -> None:
         if not injected:
             self.engine.handle_mouse_button(getattr(button, "name", str(button)), pressed)
+
+    def _on_move(self, x: int, y: int, injected: bool = False) -> None:
+        if not injected:
+            self.engine.handle_mouse_motion()
+
+    def _on_scroll(self, x: int, y: int, dx: int, dy: int, injected: bool = False) -> None:
+        if not injected:
+            self.engine.handle_mouse_scroll()

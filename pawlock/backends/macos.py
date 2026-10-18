@@ -40,6 +40,7 @@ FLAGS_CHANGED = 12
 LEFT_MOUSE_DOWN, LEFT_MOUSE_UP = 1, 2
 RIGHT_MOUSE_DOWN, RIGHT_MOUSE_UP = 3, 4
 OTHER_MOUSE_DOWN, OTHER_MOUSE_UP = 25, 26
+SCROLL_WHEEL = 22
 TAP_DISABLED_BY_TIMEOUT = 0xFFFFFFFE
 TAP_DISABLED_BY_USER_INPUT = 0xFFFFFFFF
 
@@ -187,8 +188,10 @@ class MacBackend(InputBackend):
             if event_type in _BUTTON_EVENTS:
                 button, pressed = _BUTTON_EVENTS[event_type]
                 swallow = self.engine.handle_mouse_button(button, pressed)
+            elif event_type == SCROLL_WHEEL:
+                swallow = self.engine.handle_mouse_scroll()  # incl. two-finger scrolls
             else:
-                swallow = self.engine.handle_mouse_motion()  # moves, drags, scrolls
+                swallow = self.engine.handle_mouse_motion()  # moves and drags
         except Exception:
             log.exception("Could not decode a mouse event; letting it through")
             return event

@@ -165,3 +165,13 @@ class TestMacIntercepts:
         mac.engine.lock()
         up = {}
         assert mac.mouse_intercept(macos.LEFT_MOUSE_UP, up) is up
+
+
+def test_scrolls_are_reported_separately(win, mac):
+    win.engine.lock()
+    with pytest.raises(Suppressed):
+        win.mouse_filter(windows.WM_MOUSEHWHEEL, mouse())
+    assert win.engine._blocked_scrolls == 1
+    mac.engine.lock()
+    assert mac.mouse_intercept(macos.SCROLL_WHEEL, {}) is None
+    assert mac.engine._blocked_scrolls == 1

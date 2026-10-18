@@ -25,6 +25,7 @@ examples:
   pawlock                     start protecting (tray icon appears)
   pawlock --practice          start locked for 30 s to practise unlocking
   pawlock --dry-run           show what would be locked without blocking anything
+  pawlock --away-minutes 5    lock by itself after 5 minutes with nobody at the computer
   pawlock --stop              emergency stop for a running PawLock
   pawlock --doctor            check that everything works on this computer
 
@@ -52,6 +53,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run.add_argument("--sensitivity", choices=SENSITIVITIES, help="cat-detector sensitivity for this run")
     run.add_argument("--max-lock-minutes", type=float, metavar="N", help="auto-unlock after N minutes (0 = never)")
+    run.add_argument(
+        "--away-minutes", type=float, metavar="N",
+        help="away mode: lock after N minutes with no keyboard/mouse use (0 = off)",
+    )
     run.add_argument("--no-auto-detect", action="store_true", help="only lock when you press the hotkey")
     run.add_argument("--no-tray", action="store_true", help="don't show the tray icon")
     run.add_argument("--no-overlay", action="store_true", help="don't show the on-screen banner")
@@ -157,6 +162,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         auto_detect=False if args.no_auto_detect else None,
         sensitivity=args.sensitivity,
         max_lock_minutes=args.max_lock_minutes,
+        away_minutes=max(0.0, args.away_minutes) if args.away_minutes is not None else None,
     )
     try:
         return PawLockApp(config, config_file, options).run()

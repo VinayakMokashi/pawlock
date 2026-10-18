@@ -88,6 +88,21 @@ def _input_hooks() -> Tuple[str, str]:
     return OK, f"global keyboard + mouse hooks work (pynput backend: {backend})"
 
 
+def _away(config_file: Path) -> Callable[[], Tuple[str, str]]:
+    def check() -> Tuple[str, str]:
+        from .idle import make_idle_source
+
+        config, _ = load_config(config_file)
+        source = make_idle_source()
+        timing = (f"OS idle timer works (idle now: {source():.0f}s)" if source is not None
+                  else "OS idle timer unavailable; using PawLock's own timing")
+        if not config.away_lock:
+            return OK, f"off | {timing}"
+        return OK, f"locks after {config.away_lock_minutes:g} min with nobody at the computer | {timing}"
+
+    return check
+
+
 def _tray() -> Tuple[str, str]:
     import pystray
 
@@ -123,6 +138,7 @@ def run_doctor(config_file: Path) -> Tuple[str, bool]:
         checks.append(_probe("Display server", _display_server))
     checks += [
         _probe("Input hooks", _input_hooks),
+        _probe("Away mode", _away(config_file)),
         _probe("Tray icon", _tray),
         _probe("On-screen banner", _overlay),
         _probe("PawLock process", _instance),

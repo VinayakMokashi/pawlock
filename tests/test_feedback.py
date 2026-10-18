@@ -70,3 +70,42 @@ def test_icons(tmp_path):
     assert paw_glyph(48, (255, 0, 0)).getpixel((0, 0))[3] == 0  # transparent corner
     ico, png = write_app_icons(tmp_path)
     assert ico.stat().st_size > 1000 and png.stat().st_size > 1000
+
+
+def test_away_lock_is_quiet_and_shows_the_banner_when_touched():
+    from pawlock.engine import REASON_AWAY
+    from pawlock.feedback import is_quiet_lock
+
+    change = StateChange(True, REASON_AWAY, "no keyboard or mouse activity for 10 minutes")
+    assert is_quiet_lock(change)
+    assert not is_quiet_lock(StateChange(True, REASON_AWAY, "x", dry_run=True))
+    title, body = describe(change, HOTKEY, "unlock")
+    assert title == "Away mode: keyboard & trackpad locked"
+    assert body.startswith("No keyboard or mouse activity for 10 minutes.")
+
+    sound, tray, overlay = Recorder(), Recorder(), Recorder()
+    hub = FeedbackHub(sound=sound, notifications=True)
+    hub.tray, hub.overlay = tray, overlay
+    hub.state_changed(change, hotkey_text=HOTKEY, phrase="unlock", auto_detect=True, tooltip="t")
+    assert sound.calls == [] and overlay.calls == []           # silent...
+    assert ("set_state", ("locked", "t")) in tray.calls        # ...except the red paw
+    hub.poke(title, body, first=True)
+    assert overlay.calls[-1][0] == "flash"
+
+    hub.overlay = None  # e.g. macOS: no banner -> a single notification
+    tray.calls.clear()
+    hub.poke(title, body, first=True)
+    hub.poke(title, body, first=False)
+    assert [name for name, _ in tray.calls] == ["notify"]
+
+
+def test_unlock_shows_what_was_blocked():
+    summary = "Blocked 214 key presses and 37 clicks while locked."
+    assert describe(StateChange(False, REASON_HOTKEY, summary=summary), HOTKEY, "")[1] == summary
+    overlay = Recorder()
+    hub = FeedbackHub(sound=Recorder(), notifications=False)
+    hub.overlay = overlay
+    hub.state_changed(StateChange(False, REASON_HOTKEY, summary=summary), hotkey_text=HOTKEY, phrase="",
+                      auto_detect=True, tooltip="t")
+    name, args = overlay.calls[-1]
+    assert name == "flash" and args[1] == summary and args[3] == 6000

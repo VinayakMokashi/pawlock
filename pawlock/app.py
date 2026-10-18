@@ -27,7 +27,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Tuple
 
 from . import __version__, autostart, paths
 from .backends import BackendError, create_backend
@@ -41,8 +41,9 @@ from .engine import (
     LockEngine,
     StateChange,
 )
-from .feedback import FeedbackHub
+from .feedback import FeedbackHub, describe, is_quiet_lock
 from .feedback.sound import SoundPlayer
+from .idle import make_idle_source
 from .instance import InstanceGuard
 from .messages import show_message
 from .safety import Watchdog, install_crash_guards, install_signal_handlers, run_with_timeout
@@ -70,6 +71,7 @@ class RunOptions:
     auto_detect: Optional[bool] = None
     sensitivity: Optional[str] = None
     max_lock_minutes: Optional[float] = None
+    away_minutes: Optional[float] = None  # 0 turns away mode off for this run
 
 
 def _pick(override: Any, configured: Any) -> Any:
@@ -88,10 +90,17 @@ class PawLockApp:
         self._cleanup_lock = threading.Lock()
         self._cleaned_up = False
         self._dry_run_release_at: Optional[float] = None
+        # Away-mode locks are silent; these drive the banner shown when
+        # someone touches the computer while it's quietly locked.
+        self._quiet_lock_text: Optional[Tuple[str, str]] = None
+        self._quiet_poked_at: Optional[float] = None
 
         opts = self.options
         if opts.sensitivity:
             config.sensitivity = opts.sensitivity  # In-memory only; never saved.
+        if opts.away_minutes is not None:
+            config.away_lock = opts.away_minutes > 0  # In-memory only; never saved.
+            config.away_lock_minutes = opts.away_minutes or config.away_lock_minutes
         self.hotkey = config.parsed_hotkey()
         self.detector = CatDetector(config.detector_settings())
         self.engine = LockEngine(
@@ -103,6 +112,8 @@ class PawLockApp:
             stale_key_seconds=config.stale_key_seconds,
             cooldown_seconds=config.cooldown_seconds,
             dry_run=opts.dry_run,
+            away_seconds=config.away_seconds(),
+            idle_source=make_idle_source(),
             on_change=self._events.put,  # Must not block: the hooks call this.
         )
         self.backend = create_backend(self.engine, config.backend)
@@ -238,6 +249,8 @@ class PawLockApp:
     def _announce_startup(self) -> None:
         how = f"Lock / unlock: press {self.hotkey.display()}."
         detail = "Cat detection is on." if self.engine.auto_detect else "Cat detection is off."
+        if self.engine.away_seconds > 0:
+            detail += f" Locks itself after {self.config.away_lock_minutes:g} min away."
         if self.engine.dry_run:
             detail = "DRY RUN: nothing will be blocked. " + detail
         if self.feedback.overlay is not None and not self.engine.locked:
@@ -260,19 +273,36 @@ class PawLockApp:
                 if change is not None:
                     self._apply(change)
                 self._release_dry_run_lock()
+                self._show_banner_if_touched()
                 self.engine.tick()
             except Exception:
                 log.exception("Controller error; releasing the lock to be safe")
                 self.engine.force_unlock(REASON_SAFETY, "PawLock hit an internal error")
 
+    def _show_banner_if_touched(self) -> None:
+        """During a quiet (away-mode) lock, show the banner when input is blocked."""
+        if self._quiet_lock_text is None or not self.engine.locked:
+            return
+        blocked = self.engine.last_blocked_at
+        if blocked is None or (self._quiet_poked_at is not None and blocked - self._quiet_poked_at < 3.0):
+            return
+        first = self._quiet_poked_at is None
+        self._quiet_poked_at = blocked
+        self.feedback.poke(*self._quiet_lock_text, first=first)
+
     def _apply(self, change: StateChange) -> None:
         detail = f": {change.detail}" if change.detail else ""
+        self._quiet_poked_at = None
         if change.locked:
             log.info("LOCKED (%s%s)%s", change.reason, detail, " [dry run]" if change.dry_run else "")
             if change.dry_run:
                 self._dry_run_release_at = time.monotonic() + DRY_RUN_HOLD_SECONDS
+            self._quiet_lock_text = (
+                describe(change, self.hotkey.display(), self.engine.unlock_phrase) if is_quiet_lock(change) else None
+            )
         else:
-            log.info("Unlocked (%s%s)", change.reason, detail)
+            self._quiet_lock_text = None
+            log.info("Unlocked (%s%s)%s", change.reason, detail, f" {change.summary}" if change.summary else "")
             if self._practice_active:
                 self._practice_active = False
                 if self.watchdog is not None:
@@ -305,6 +335,19 @@ class PawLockApp:
         else:
             text = "PawLock: unlocked (cat detection off)"
         return text + (" [dry run]" if self.engine.dry_run else "")
+
+    def away_text(self) -> str:
+        return f"Lock when I'm away ({self.config.away_lock_minutes:g} min)"
+
+    def away_lock_enabled(self) -> bool:
+        return self.engine.away_seconds > 0
+
+    def set_away_lock(self, enabled: bool) -> None:
+        self.config.away_lock = enabled
+        self.engine.reconfigure(away_seconds=self.config.away_seconds())
+        self._persist("away_lock", enabled)
+        log.info("Away mode %s", "enabled" if enabled else "disabled")
+        self._refresh_tray()
 
     def hotkey_text(self) -> str:
         return self.hotkey.display()
@@ -389,6 +432,7 @@ class PawLockApp:
             cooldown_seconds=config.cooldown_seconds,
             stale_key_seconds=config.stale_key_seconds,
             detector_settings=config.detector_settings(),
+            away_seconds=config.away_seconds(),
         )
         self.engine.auto_detect = config.auto_detect
         self.feedback.sound.enabled = config.sound

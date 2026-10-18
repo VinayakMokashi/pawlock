@@ -33,6 +33,7 @@
 - [What it does](#what-it-does)
 - [Install (no programming needed)](#install-no-programming-needed)
 - [Using PawLock](#using-pawlock)
+- [When you're in another room (and the trackpad)](#when-youre-in-another-room-and-the-trackpad)
 - [You can't lock yourself out](#you-cant-lock-yourself-out)
 - [How cats are detected](#how-cats-are-detected)
 - [Settings](#settings)
@@ -55,7 +56,9 @@
 | 🔒 | **Locks keyboard *and* trackpad/mouse** | Every key, click, scroll and pointer movement is swallowed before it reaches any app. |
 | 🔑 | **Paw-proof hotkey** | `Ctrl + Alt + Shift + L` locks and unlocks. It is matched *exactly*, so a cat lying on those keys **plus any other key** can't trigger it. |
 | ⌨️ | **Backup unlock word** | While locked, type `unlock`. Works even on laptop keyboards that can't register four keys at once. |
-| 🐈 | **Automatic cat detection** | Spots paw-shaped input (many keys at once, a cat sitting down, mashing) and locks within milliseconds. Normal typing, even at 160 WPM, doesn't trigger it ([benchmarks](#how-cats-are-detected)). |
+| 🐈 | **Automatic cat detection** | Spots paw-shaped input (many keys at once, a cat sitting down, mashing, a click storm on the trackpad) and locks within milliseconds. Normal typing, even at 160 WPM, doesn't trigger it ([benchmarks](#how-cats-are-detected)). |
+| 🚪 | **Away mode** | Left the room? After 10 minutes with nobody at the computer, PawLock locks by itself, *before* the cat arrives. Silent: no sound, no banner over the movie you're watching from the sofa. |
+| 📋 | **"While you were away" report** | On unlock: *"Blocked 214 key presses, 37 clicks and some scrolling while locked."* So you know whether the cat visited. |
 | 🟢 | **Clear feedback** | A tray icon that changes colour, an always-on-top banner, and sounds for lock/unlock. |
 | 🛟 | **Six layers of safety** | Fail-open design, crash guards, watchdog, optional time limit, a `--stop` kill switch and the OS's own escape hatches. A bug can't leave you without a keyboard. |
 | 🧷 | **No stuck keys** | Releases of keys you were already holding are always delivered, so Ctrl/Shift/mouse buttons never get stuck "down". |
@@ -134,8 +137,49 @@ locked. The banner never takes keyboard focus and clicks pass straight through i
 
 ### The tray menu
 
-`Lock now` · `Practice lock (30 s)` · `Unlock` · `Detect cats automatically ✓` · `Sound effects ✓` ·
-`Start at login` · `Edit settings…` · `Reload settings` · `Open log folder` · `Quit PawLock`
+`Lock now` · `Practice lock (30 s)` · `Unlock` · `Detect cats automatically ✓` ·
+`Lock when I'm away (10 min) ✓` · `Sound effects ✓` · `Start at login` · `Edit settings…` ·
+`Reload settings` · `Open log folder` · `Quit PawLock`
+
+---
+
+## When you're in another room (and the trackpad)
+
+Most cat chaos happens while you're away, so PawLock has two layers for it:
+
+**1. Away mode (on by default).** When nobody has touched the keyboard, mouse or trackpad
+for **10 minutes**, PawLock locks by itself, so the computer is already locked when Snowy
+arrives. Nothing gets through: no keys, no clicks, no scrolling, no dragging files around.
+
+- It's **silent**: no sound and no banner, just a red tray paw. If you're watching a video
+  from across the room, nothing pops up over it.
+- The banner appears as soon as **someone touches** the keyboard or trackpad, so you'll know
+  why nothing is responding:
+
+  ![Away mode banner](docs/images/banner-away.png)
+- When you come back and unlock, PawLock tells you what it stopped:
+
+  ![Welcome back banner](docs/images/banner-welcome-back.png)
+- It also asks the operating system how long the computer has been idle (Windows, macOS
+  and X11), so it never locks while you're busy in a window PawLock can't see (an
+  administrator window, say).
+- Change the delay with `"away_lock_minutes"`, or switch it off from the tray
+  (**Lock when I'm away**) or with `"away_lock": false`.
+
+**2. Cat detection while you're at the desk.** The keyboard rules catch a cat within a few
+keys. For the trackpad and mouse, the **click storm** rule catches kneading and batting
+(15+ clicks within 2.5 s, far beyond double- and triple-clicks).
+
+**The honest limit:** a cat *walking* across a trackpad produces a pointer move and a tap
+or two, which looks exactly like a person. No heuristic can tell those apart without also
+locking *you* out. That's why away mode exists: it doesn't need to tell, because the
+computer is already locked. If you leave for a short moment, press
+`Ctrl + Alt + Shift + L` (or click the tray paw) on your way out.
+
+> 💡 PawLock can't protect the **Windows/macOS sign-in screen**. If your computer locks
+> itself and a cat walks on the password box, the OS handles that input (a cat can trigger
+> "too many attempts" delays). With PawLock's away mode you can give the OS screen lock a
+> longer timeout.
 
 ---
 
@@ -174,7 +218,8 @@ vowels*. PawLock looks at **how** keys are pressed, never at what you're typing.
 | **Sitting** | 3+ keys held for 1.5 s | sitting / lying down |
 | **Long hold** | one typing key held for 20 s | a paw parked on "k" |
 | **Mashing** | in the last 12 presses there's *paw contact* (keys landing within 35 ms) **plus** 2 of: no spaces, no vowels, clustered keys, faster than fast typing | walking across |
-| **Click storm** *(off by default)* | 12+ clicks within 2 s | kneading the trackpad |
+| **Click storm** | 15+ clicks within 2.5 s | kneading or batting the trackpad / mouse |
+| **Away mode** *(not a heuristic)* | nobody touched anything for 10 min | any cat, any device, while you're out |
 
 Measured with the reproducible simulator in [`pawlock/simulate.py`](pawlock/simulate.py)
 (`python scripts/detector_benchmark.py --runs 50`):
@@ -216,6 +261,8 @@ then choose **Reload settings**.
 | `lock_mouse` | `true` | Also block mouse/trackpad. `false` = keyboard-only lock. |
 | `auto_detect` | `true` | Lock automatically when a cat is detected. |
 | `sensitivity` | `"medium"` | `low`, `medium` or `high` (see above). |
+| `away_lock` | `true` | Away mode: lock when nobody has used the computer for a while. |
+| `away_lock_minutes` | `10` | How long "a while" is (minimum 0.5). |
 | `max_lock_minutes` | `0` | Auto-unlock after this many minutes (`0` = never). |
 | `start_locked` | `false` | Lock as soon as PawLock starts. |
 | `tray` / `overlay` / `sound` / `notifications` | `true` | Feedback channels (the banner is off by default on macOS). |
@@ -238,6 +285,7 @@ pawlock --dry-run             detect and report, never block anything
 pawlock --lock                start locked
 pawlock --sensitivity high    override the detector sensitivity for this run
 pawlock --max-lock-minutes 60 auto-unlock after an hour
+pawlock --away-minutes 5      away mode after 5 minutes for this run (0 = off)
 pawlock --no-auto-detect      hotkey only
 pawlock --no-tray --no-overlay --no-sound
 pawlock --stop                kill switch: stop the running PawLock
@@ -352,6 +400,17 @@ won't let it see that window's input.
 Holding one key is fine for 20 s (medium) and arrow/editing keys are exempt. If a game
 needs three letter keys held at once, untick *Detect cats automatically* while you play.
 
+**It locked while I was watching a video without touching anything.**
+That's away mode: no input for 10 minutes. It's silent, and the banner only appears when you
+touch something. Press the hotkey to continue, raise `away_lock_minutes`, or untick
+*Lock when I'm away* in the tray.
+
+**Does it protect the trackpad / mouse?**
+Yes. While locked, every pointer move, click, tap and scroll is blocked (pinch/swipe
+*gestures* on macOS are the exception). Clicking storms are detected automatically; a cat
+gently walking over the trackpad isn't distinguishable from you, which is what
+[away mode](#when-youre-in-another-room-and-the-trackpad) is for.
+
 **A few letters got through before it locked. Why?**
 Detection needs evidence. A paw chord is caught on the 5th key; a walking cat after a few
 steps. Anything typed *after* detection is blocked.
@@ -383,6 +442,7 @@ pawlock/
 │   ├── engine.py          lock state machine: decides the fate of every event
 │   ├── detector.py        cat-detection heuristics
 │   ├── hotkey.py          exact-match hotkey + unlock phrase
+│   ├── idle.py            OS idle time for away mode (Windows / macOS / X11)
 │   ├── keys.py            one key vocabulary for all OSes + keyboard geometry
 │   ├── backends/          windows.py · macos.py · swap.py (Linux) on top of pynput
 │   ├── feedback/          tray.py · overlay.py · sound.py · icons.py
@@ -392,7 +452,7 @@ pawlock/
 │   ├── config.py          self-healing JSON settings
 │   ├── doctor.py          --doctor health check
 │   └── simulate.py        synthetic humans and cats for tests and benchmarks
-├── tests/                 260+ tests, no real input devices needed
+├── tests/                 280+ tests, no real input devices needed
 ├── scripts/               build.py · make_icons.py · detector_benchmark.py · capture_screenshots.py
 ├── docs/                  how it works, detection, safety, configuration, packaging, troubleshooting
 ├── assets/                app icons (generated by scripts/make_icons.py)
@@ -409,7 +469,7 @@ Please attach the output of `pawlock --doctor` to bug reports.
 
 ```bash
 pip install -r requirements-dev.txt
-pytest          # 260+ tests, run anywhere (no keyboard hooks are installed)
+pytest          # 280+ tests, run anywhere (no keyboard hooks are installed)
 ruff check .
 ```
 
