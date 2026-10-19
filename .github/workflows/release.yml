@@ -43,8 +43,16 @@ jobs:
       - name: Test
         run: pytest
 
-      - name: Build with PyInstaller
-        run: python scripts/build.py --archive
+      - name: Install Inno Setup (Windows installer builder)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup --no-progress -y
+          }
+
+      - name: Build app, archive and installer
+        run: python scripts/build.py --archive --installer
 
       - uses: actions/upload-artifact@v7
         with:
@@ -52,6 +60,8 @@ jobs:
           path: |
             dist/*.zip
             dist/*.tar.gz
+            dist/*.dmg
+            dist/PawLock-Setup-*.exe
           if-no-files-found: error
 
   release:
@@ -79,10 +89,11 @@ jobs:
           notes = match.group(1).strip() if match else "See CHANGELOG.md."
           header = (
               "## Download\n\n"
-              "| Your computer | File |\n|---|---|\n"
-              "| Windows 10/11 | `PawLock-" + version + "-windows-x64.zip` |\n"
-              "| Mac with Apple Silicon | `PawLock-" + version + "-macos-arm64.zip` |\n"
-              "| Linux (X11) | `PawLock-" + version + "-linux-x64.tar.gz` |\n\n"
+              "| Your computer | Download this | Then |\n|---|---|---|\n"
+              "| **Windows 10/11** | `PawLock-Setup-" + version + ".exe` | double-click it and click *Next* |\n"
+              "| **Mac** (Apple Silicon) | `PawLock-" + version + "-macos-arm64.dmg` | open it and drag PawLock into Applications |\n"
+              "| Linux (X11) | `PawLock-" + version + "-linux-x64.tar.gz` | extract and run `./PawLock` |\n\n"
+              "Prefer no installer? The Windows `.zip` contains the same app as a single portable `PawLock.exe`.\n\n"
               "First time? Follow the [install guide](https://github.com/" + os.environ["GITHUB_REPOSITORY"]
               + "#install-no-programming-needed). The apps are not code-signed, so Windows/macOS will ask you "
               "to confirm the first launch.\n\n## What's new\n\n"

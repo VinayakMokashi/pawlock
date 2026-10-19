@@ -53,11 +53,15 @@ class TrayIcon:
     def _build_menu(self) -> Any:
         p, a = self._pystray, self._actions
         item = p.MenuItem
+        has_window = a.window_available()
         return p.Menu(
+            # Clicking the paw opens the PawLock window (the default item).
+            # Without a window (macOS default) the click does nothing scary.
+            item("Open PawLock", self._safe(a.open_home), default=True, visible=has_window),
             item(lambda _: a.status_text(), None, enabled=False),
             item(lambda _: f"Unlock with {a.hotkey_text()}", None, enabled=False),
             p.Menu.SEPARATOR,
-            item("Lock now", self._safe(a.lock_now), default=True, enabled=lambda _: not a.is_locked()),
+            item("Lock now", self._safe(a.lock_now), enabled=lambda _: not a.is_locked()),
             item("Practice lock (30 s)", self._safe(a.practice_lock), enabled=lambda _: not a.is_locked()),
             item("Unlock", self._safe(a.unlock_now), enabled=lambda _: a.is_locked()),
             p.Menu.SEPARATOR,
@@ -83,9 +87,16 @@ class TrayIcon:
                 visible=a.autostart_supported(),
             ),
             p.Menu.SEPARATOR,
-            item("Edit settings…", self._safe(a.open_settings)),
-            item("Reload settings", self._safe(a.reload_settings)),
-            item("Open log folder", self._safe(a.open_logs)),
+            item("Settings…", self._safe(a.open_settings_window)),
+            item("How to use PawLock", self._safe(a.open_home if has_window else a.open_help)),
+            item(
+                "Advanced",
+                p.Menu(
+                    item("Edit settings file…", self._safe(a.open_settings)),
+                    item("Reload settings file", self._safe(a.reload_settings)),
+                    item("Open log folder", self._safe(a.open_logs)),
+                ),
+            ),
             p.Menu.SEPARATOR,
             item("Quit PawLock", self._safe(a.quit)),
         )
@@ -141,3 +152,47 @@ class TrayIcon:
             self._icon.stop()
         except Exception:
             pass
+
+
+def show_tray_icon_next_to_clock(executable: str, attempts: int = 20, delay: float = 1.0) -> bool:
+    """Windows 11: move PawLock's paw out of the hidden "^" area, next to the clock.
+
+    Windows 11 hides new tray icons by default, and non-technical users
+    then can't find PawLock. Explorer records every tray icon under
+    ``HKCU\\Control Panel\\NotifyIconSettings\\<id>`` (with the program's
+    path) and shows it next to the clock when ``IsPromoted`` is 1. This is
+    called once, on the first run, so a user who later hides the icon on
+    purpose is never overruled. Returns True if the icon was promoted.
+    """
+    import os
+    import time
+    import winreg
+
+    target = os.path.normcase(os.path.abspath(executable))
+    base = r"Control Panel\NotifyIconSettings"
+    for _ in range(attempts):  # Explorer creates our entry a moment after the icon appears.
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, base) as root:
+                index = 0
+                while True:
+                    try:
+                        name = winreg.EnumKey(root, index)
+                    except OSError:
+                        break
+                    index += 1
+                    access = winreg.KEY_READ | winreg.KEY_SET_VALUE
+                    with winreg.OpenKey(root, name, 0, access) as entry:
+                        try:
+                            path, _ = winreg.QueryValueEx(entry, "ExecutablePath")
+                        except OSError:
+                            continue
+                        # Paths under well-known folders are stored as "{GUID}\rest".
+                        tail = path.split("}\\", 1)[1] if path.startswith("{") and "}\\" in path else path
+                        if tail and target.endswith(os.path.normcase(tail)):
+                            winreg.SetValueEx(entry, "IsPromoted", 0, winreg.REG_DWORD, 1)
+                            log.info("Tray icon moved next to the clock")
+                            return True
+        except OSError:
+            return False  # Not Windows 11 (no such key): nothing to do.
+        time.sleep(delay)
+    return False

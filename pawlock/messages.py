@@ -8,9 +8,15 @@ import sys
 #: ``os.devnull``. False for windowed executables and ``pythonw``.
 HAS_CONSOLE = sys.stdout is not None
 
+#: Set by ``--quiet``: installers run ``PawLock.exe --stop --quiet`` and must
+#: never be blocked by a dialog box.
+QUIET = False
+
 
 def show_message(text: str, title: str = "PawLock", error: bool = False) -> None:
     """Print to the console if there is one, otherwise pop up a dialog box."""
+    if QUIET:
+        return
     if HAS_CONSOLE:
         stream = sys.stderr if error else sys.stdout
         if stream is not None:

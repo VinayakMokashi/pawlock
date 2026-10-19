@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 from typing import List, Optional
 
-from . import __version__, paths
+from . import __version__, messages, paths
 from .config import LOG_LEVELS, SENSITIVITIES, Config, load_config, save_config
 from .messages import HAS_CONSOLE, show_message
 
@@ -69,6 +69,8 @@ def build_parser() -> argparse.ArgumentParser:
     tools.add_argument("--doctor", action="store_true", help="run a health check and print a report")
     tools.add_argument("--where", action="store_true", help="show where settings and logs live")
     tools.add_argument("--reset-config", action="store_true", help="restore default settings (keeps a backup)")
+    tools.add_argument("--quiet", action="store_true", help="no dialogs or output (for installers and scripts)")
+    tools.add_argument("--welcome", action="store_true", help="show the welcome window, as on the first run")
     return parser
 
 
@@ -81,6 +83,8 @@ def _ensure_streams() -> None:
 
 def _report(text: str, error: bool = False) -> None:
     """Long reports go to the console, or to a text file that we open, if there's no console."""
+    if messages.QUIET:
+        return
     if HAS_CONSOLE:
         print(text, file=sys.stderr if error else sys.stdout)
         return
@@ -97,18 +101,20 @@ def main(argv: Optional[List[str]] = None) -> int:
     _ensure_streams()
     args = build_parser().parse_args(argv)
     config_file: Path = args.config or paths.config_path()
+    if args.quiet:
+        messages.QUIET = True
 
     # -- tools that don't start PawLock ------------------------------------
     if args.stop:
         from .instance import stop_running
 
         result = stop_running(paths.pid_path())
-        messages = {
+        outcome = {
             "stopped": "PawLock has been stopped. Your keyboard and mouse are free.",
             "not-running": "PawLock is not running.",
             "failed": "Could not stop PawLock. Use Task Manager / Activity Monitor to end it.",
         }
-        show_message(messages[result], error=result == "failed")
+        show_message(outcome[result], error=result == "failed")
         return 1 if result == "failed" else 0
 
     if args.status:
@@ -162,6 +168,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         auto_detect=False if args.no_auto_detect else None,
         sensitivity=args.sensitivity,
         max_lock_minutes=args.max_lock_minutes,
+        first_run=args.welcome or not paths.welcome_marker_path().exists(),
         away_minutes=max(0.0, args.away_minutes) if args.away_minutes is not None else None,
     )
     try:

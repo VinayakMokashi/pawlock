@@ -49,6 +49,16 @@ def pid_path() -> Path:
     return app_dir() / "pawlock.pid"
 
 
+def show_request_path() -> Path:
+    """A second PawLock leaves this note so the running one opens its window."""
+    return app_dir() / "show-window.request"
+
+
+def welcome_marker_path() -> Path:
+    """Exists once the welcome window has been shown."""
+    return app_dir() / "welcome-shown"
+
+
 def is_frozen() -> bool:
     """True when running as a PyInstaller-built executable."""
     return bool(getattr(sys, "frozen", False))

@@ -19,7 +19,6 @@ sound card or a busy UI can never stall the input hooks.
 from __future__ import annotations
 
 import atexit
-import json
 import logging
 import queue
 import sys
@@ -27,11 +26,18 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from . import __version__, autostart, paths
 from .backends import BackendError, create_backend
-from .config import Config, load_config
+from .config import (
+    SIMPLE_HOTKEY_PREFIX,
+    Config,
+    apply_simple_settings,
+    load_config,
+    simple_settings,
+    update_config_file,
+)
 from .detector import CatDetector
 from .engine import (
     REASON_MANUAL,
@@ -43,6 +49,7 @@ from .engine import (
 )
 from .feedback import FeedbackHub, describe, is_quiet_lock
 from .feedback.sound import SoundPlayer
+from .hotkey import Hotkey
 from .idle import make_idle_source
 from .instance import InstanceGuard
 from .messages import show_message
@@ -72,6 +79,7 @@ class RunOptions:
     sensitivity: Optional[str] = None
     max_lock_minutes: Optional[float] = None
     away_minutes: Optional[float] = None  # 0 turns away mode off for this run
+    first_run: bool = False               # show the welcome window
 
 
 def _pick(override: Any, configured: Any) -> Any:
@@ -94,6 +102,12 @@ class PawLockApp:
         # someone touches the computer while it's quietly locked.
         self._quiet_lock_text: Optional[Tuple[str, str]] = None
         self._quiet_poked_at: Optional[float] = None
+        # The PawLock window lives on the Tk (main) thread; other threads
+        # queue calls for it here.
+        self._ui_root: Any = None
+        self._ui_calls: queue.Queue[Callable[[], None]] = queue.Queue()
+        self._window: Any = None
+        self._window_host = False
 
         opts = self.options
         if opts.sensitivity:
@@ -130,7 +144,10 @@ class PawLockApp:
 
     def run(self) -> int:
         if not self.instance.acquire():
-            show_message("PawLock is already running (look for the paw in your system tray).")
+            # Started again while running (double-clicked, Start menu...):
+            # ask the running PawLock to show its window instead.
+            if not _ask_running_instance_to_show():
+                show_message("PawLock is already running. Look for the paw near the clock.")
             return EXIT_ALREADY_RUNNING
         try:
             install_crash_guards(self._on_crash)
@@ -188,20 +205,30 @@ class PawLockApp:
     # ------------------------------------------------------------------
 
     def _run_ui(self) -> None:
+        want_overlay = _pick(self.options.overlay, self.config.overlay)
+        # The PawLock window uses Tk too. On macOS Tk is only used when the
+        # banner is switched on (see docs/TROUBLESHOOTING.md).
+        want_window = sys.platform != "darwin" or want_overlay
         root = None
-        if _pick(self.options.overlay, self.config.overlay):
+        if want_overlay or want_window:
             try:
                 import tkinter as tk
-
-                from .feedback.overlay import Overlay
 
                 root = tk.Tk()
                 root.withdraw()
                 root.title("PawLock")
+            except Exception:
+                log.warning("Tk unavailable: no banner or window; continuing without them", exc_info=True)
+                root = None
+        if root is not None and want_overlay:
+            try:
+                from .feedback.overlay import Overlay
+
                 self.feedback.overlay = Overlay(root, self.config.overlay_position)
             except Exception:
                 log.warning("On-screen banner unavailable; continuing without it", exc_info=True)
-                root = None
+        self._ui_root = root
+        self._window_host = root is not None and want_window
 
         tray = None
         if _pick(self.options.tray, self.config.tray):
@@ -228,10 +255,13 @@ class PawLockApp:
                 tray.run_in_thread()
 
         self._refresh_tray()
-        self._announce_startup()
+        if self.options.first_run:
+            self._welcome()
+        else:
+            self._announce_startup()
 
         if root is not None:
-            root.after(200, self._watch_for_stop, root)
+            root.after(100, self._ui_pump)
             root.mainloop()
         elif tray_owns_main_thread and tray is not None:
             tray.run_blocking()
@@ -239,12 +269,63 @@ class PawLockApp:
             while not self._stopping.wait(0.2):
                 pass
 
-    def _watch_for_stop(self, root: Any) -> None:
-        # Also gives Python a chance to run signal handlers while Tk is in C.
+    def _ui_pump(self) -> None:
+        """Runs on the Tk thread every 100 ms: queued UI calls, and shutdown.
+
+        Also gives Python a chance to run signal handlers while Tk is in C.
+        """
+        root = self._ui_root
         if self._stopping.is_set():
             root.quit()
+            return
+        while True:
+            try:
+                call = self._ui_calls.get_nowait()
+            except queue.Empty:
+                break
+            try:
+                call()
+            except Exception:
+                log.exception("Window action failed")
+        root.after(100, self._ui_pump)
+
+    def _welcome(self) -> None:
+        """First run: open the window on the "How to use" page."""
+        try:
+            paths.welcome_marker_path().parent.mkdir(parents=True, exist_ok=True)
+            paths.welcome_marker_path().write_text(__version__, encoding="utf-8")
+        except OSError:
+            pass
+        if self._window_host:
+            self.open_window("howto", welcome=True)
         else:
-            root.after(200, self._watch_for_stop, root)
+            self._announce_startup()
+        if sys.platform == "win32" and paths.is_frozen() and self.feedback.tray is not None:
+            from .feedback.tray import show_tray_icon_next_to_clock
+
+            threading.Thread(
+                target=show_tray_icon_next_to_clock, args=(sys.executable,), name="tray-promote", daemon=True
+            ).start()
+
+    def open_window(self, tab: str = "howto", welcome: bool = False) -> None:
+        """Show the PawLock window (safe from any thread)."""
+        if not self._window_host:
+            if tab == "settings":
+                self.open_settings()
+            else:
+                self.open_help()
+            return
+        self._ui_calls.put(lambda: self._show_window(tab, welcome))
+
+    def _show_window(self, tab: str, welcome: bool) -> None:
+        if self._window is None:
+            from .feedback.window import build_window
+
+            self._window = build_window(self._ui_root, self)
+            if self._window is None:
+                self.open_settings()
+                return
+        self._window.show(tab, welcome)
 
     def _announce_startup(self) -> None:
         how = f"Lock / unlock: press {self.hotkey.display()}."
@@ -274,10 +355,23 @@ class PawLockApp:
                     self._apply(change)
                 self._release_dry_run_lock()
                 self._show_banner_if_touched()
+                self._check_show_request()
                 self.engine.tick()
             except Exception:
                 log.exception("Controller error; releasing the lock to be safe")
                 self.engine.force_unlock(REASON_SAFETY, "PawLock hit an internal error")
+
+    def _check_show_request(self) -> None:
+        """Another PawLock was started: it left a note asking us to show the window."""
+        if not self._window_host:
+            return  # Leave the note: the other copy will tell the user we're running.
+        request = paths.show_request_path()
+        if request.exists():
+            try:
+                request.unlink()
+            except OSError:
+                return
+            self.open_window()
 
     def _show_banner_if_touched(self) -> None:
         """During a quiet (away-mode) lock, show the banner when input is blocked."""
@@ -419,7 +513,52 @@ class PawLockApp:
         paths.log_dir().mkdir(parents=True, exist_ok=True)
         paths.open_in_default_app(paths.log_dir())
 
-    def reload_settings(self) -> None:
+    # -- the PawLock window -------------------------------------------------
+
+    def window_available(self) -> bool:
+        return self._window_host
+
+    def open_home(self) -> None:
+        self.open_window("howto")
+
+    def open_settings_window(self) -> None:
+        self.open_window("settings")
+
+    def open_help(self) -> None:
+        import webbrowser
+
+        from .feedback.window import HELP_URL
+
+        webbrowser.open(HELP_URL)
+
+    def shortcut_prefix(self) -> str:
+        """``"Ctrl + Alt + Shift"`` (``"Control + Option + Shift"`` on a Mac)."""
+        return Hotkey.parse(SIMPLE_HOTKEY_PREFIX + "a").display().rsplit(" + ", 1)[0]
+
+    def current_settings(self) -> Dict[str, Any]:
+        values = simple_settings(self.config)
+        values["autostart"] = self.autostart_enabled()
+        return values
+
+    def save_settings(self, values: Dict[str, Any]) -> List[str]:
+        """Apply the Settings tab. Returns friendly error messages ([] on success)."""
+        changes, errors = apply_simple_settings(self.config, values)
+        if errors:
+            return errors
+        if changes:
+            try:
+                update_config_file(self.config_file, changes)
+            except (OSError, ValueError) as exc:
+                log.error("Could not save settings: %s", exc)
+                return [f"Couldn't save the settings file ({exc})."]
+            log.info("Settings changed in the window: %s", ", ".join(sorted(changes)))
+        wanted = bool(values.get("autostart", self.autostart_enabled()))
+        if self.autostart_supported() and wanted != self.autostart_enabled():
+            self.set_autostart(wanted)
+        self.reload_settings(announce=False)
+        return []
+
+    def reload_settings(self, announce: bool = True) -> None:
         config, warnings = load_config(self.config_file)
         for warning in warnings:
             log.warning("Settings: %s", warning)
@@ -446,6 +585,8 @@ class PawLockApp:
             log.warning("Hotkey %s: %s", self.hotkey, advice)
         log.info("Settings reloaded (hotkey=%s, sensitivity=%s)", self.hotkey, config.sensitivity)
         self._refresh_tray()
+        if not announce:
+            return
         message = "Settings reloaded."
         if warnings:
             message += f" {len(warnings)} problem(s) found; defaults were used (see the log)."
@@ -470,21 +611,9 @@ class PawLockApp:
     def _persist(self, key: str, value: Any) -> None:
         """Save one setting the user changed from the tray, leaving the rest of the file alone."""
         try:
-            raw = json.loads(self.config_file.read_text(encoding="utf-8-sig"))
-            if not isinstance(raw, dict):
-                raise ValueError("not a JSON object")
-        except FileNotFoundError:
-            raw = {}
-        except (OSError, ValueError) as exc:
-            log.warning("Not saving %s: the settings file can't be read (%s)", key, exc)
-            return
-        raw[key] = value
-        try:
-            tmp = self.config_file.with_name(self.config_file.name + ".tmp")
-            tmp.write_text(json.dumps(raw, indent=2) + "\n", encoding="utf-8")
-            tmp.replace(self.config_file)
+            update_config_file(self.config_file, {key: value})
             setattr(self.config, key, value)
-        except OSError as exc:
+        except (OSError, ValueError) as exc:
             log.warning("Could not save %s: %s", key, exc)
 
     # ------------------------------------------------------------------
@@ -524,6 +653,26 @@ class PawLockApp:
             self.feedback.tray.stop()
         self.instance.release()
         log.info("PawLock stopped")
+
+
+def _ask_running_instance_to_show(timeout: float = 2.5) -> bool:
+    """Leave a note for the running PawLock to open its window; True if it did."""
+    request = paths.show_request_path()
+    try:
+        request.parent.mkdir(parents=True, exist_ok=True)
+        request.write_text("show", encoding="utf-8")
+    except OSError:
+        return False
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if not request.exists():
+            return True  # Picked up: the window is opening.
+        time.sleep(0.1)
+    try:
+        request.unlink()
+    except OSError:
+        pass
+    return False
 
 
 def _enable_dpi_awareness() -> None:

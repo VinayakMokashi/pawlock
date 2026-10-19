@@ -85,3 +85,61 @@ def test_away_mode_settings():
     assert warnings == [] and config.away_seconds() == 0
     _, warnings = config_from_dict({"away_lock_minutes": 0})
     assert len(warnings) == 1  # below the 0.5 minute minimum
+
+
+# ---------------------------------------------------------------------------
+# The simple settings form (PawLock window)
+# ---------------------------------------------------------------------------
+
+from pawlock.config import apply_simple_settings, simple_settings, update_config_file  # noqa: E402
+
+
+def form(**overrides):
+    values = simple_settings(Config())
+    values.update(overrides)
+    return values
+
+
+def test_simple_settings_defaults():
+    values = simple_settings(Config())
+    assert values["letter"] == "L" and values["custom_hotkey"] == ""
+    assert values["away_lock_minutes"] == "10" and values["sensitivity"] == "medium"
+
+
+def test_custom_hotkey_is_flagged():
+    values = simple_settings(Config(hotkey="ctrl+alt+k"))
+    assert values["letter"] == "" and values["custom_hotkey"] == "Ctrl + Alt + K"
+
+
+def test_unchanged_form_changes_nothing():
+    assert apply_simple_settings(Config(), form()) == ({}, [])
+
+
+def test_form_changes_are_validated_and_collected():
+    changes, errors = apply_simple_settings(
+        Config(), form(letter="K", unlock_phrase="Snowy", sensitivity="low", away_lock_minutes="15",
+                       sound=False, away_lock=False)
+    )
+    assert errors == []
+    assert changes == {"hotkey": "ctrl+alt+shift+k", "unlock_phrase": "snowy", "sensitivity": "low",
+                       "away_lock_minutes": 15.0, "sound": False, "away_lock": False}
+
+
+def test_form_errors_are_friendly_and_save_nothing():
+    changes, errors = apply_simple_settings(Config(), form(unlock_phrase="no", away_lock_minutes="soon", letter="K"))
+    assert changes == {}
+    assert errors[0].startswith("Unlock word:")
+    assert errors[1].startswith("Away mode:")
+    _, errors = apply_simple_settings(Config(), form(away_lock_minutes="0"))
+    assert errors and errors[0].startswith("Away mode:")
+
+
+def test_update_config_file_keeps_notes_and_unknown_keys(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"_note": "mine", "hotkey": "ctrl+alt+shift+l", "future_option": 1}), encoding="utf-8")
+    update_config_file(path, {"hotkey": "ctrl+alt+shift+k"})
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    assert saved == {"_note": "mine", "hotkey": "ctrl+alt+shift+k", "future_option": 1}
+    fresh = tmp_path / "new" / "config.json"
+    update_config_file(fresh, {"sound": False})
+    assert json.loads(fresh.read_text(encoding="utf-8"))["sound"] is False

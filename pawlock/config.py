@@ -195,6 +195,96 @@ def config_from_dict(raw: Dict[str, Any]) -> Tuple[Config, List[str]]:
     return config, warnings
 
 
+# ---------------------------------------------------------------------------
+# The simple settings form (PawLock window → Settings tab)
+# ---------------------------------------------------------------------------
+
+#: The window offers Ctrl + Alt + Shift + <letter>: safe and easy to explain.
+SIMPLE_HOTKEY_PREFIX = "ctrl+alt+shift+"
+
+
+def simple_settings(config: Config) -> Dict[str, Any]:
+    """Current settings as the simple form shows them."""
+    rest = config.hotkey[len(SIMPLE_HOTKEY_PREFIX):] if config.hotkey.startswith(SIMPLE_HOTKEY_PREFIX) else ""
+    letter = rest if len(rest) == 1 and rest.isalpha() else ""
+    return {
+        "letter": letter.upper(),
+        "custom_hotkey": "" if letter else Hotkey.parse(config.hotkey).display(),
+        "unlock_phrase": config.unlock_phrase,
+        "auto_detect": config.auto_detect,
+        "sensitivity": config.sensitivity,
+        "away_lock": config.away_lock,
+        "away_lock_minutes": f"{config.away_lock_minutes:g}",
+        "lock_mouse": config.lock_mouse,
+        "sound": config.sound,
+    }
+
+
+def apply_simple_settings(config: Config, values: Dict[str, Any]) -> Tuple[Dict[str, Any], List[str]]:
+    """Validate what the user entered in the form.
+
+    Returns ``(changes, errors)``: ``changes`` maps setting names to new values
+    (only settings that actually changed); ``errors`` are friendly sentences.
+    """
+    current = simple_settings(config)
+    changes: Dict[str, Any] = {}
+    errors: List[str] = []
+
+    letter = str(values.get("letter", "")).strip().lower()
+    if letter and letter != current["letter"].lower():
+        if len(letter) == 1 and letter.isalpha():
+            changes["hotkey"] = SIMPLE_HOTKEY_PREFIX + letter
+        else:
+            errors.append("Please choose a letter for the shortcut.")
+
+    try:
+        phrase = PhraseMatcher.validate(str(values.get("unlock_phrase", "")))
+        if phrase != config.unlock_phrase:
+            changes["unlock_phrase"] = phrase
+    except ValueError as exc:
+        errors.append(f"Unlock word: {exc}.")
+
+    sensitivity = str(values.get("sensitivity", config.sensitivity))
+    if sensitivity not in SENSITIVITIES:
+        errors.append("Please choose a cat-detection level.")
+    elif sensitivity != config.sensitivity:
+        changes["sensitivity"] = sensitivity
+
+    try:
+        minutes = float(str(values.get("away_lock_minutes", "")).strip())
+        if not 1 <= minutes <= 240:
+            raise ValueError
+        if minutes != config.away_lock_minutes:
+            changes["away_lock_minutes"] = minutes
+    except ValueError:
+        errors.append("Away mode: enter a number of minutes between 1 and 240.")
+
+    for key in ("auto_detect", "away_lock", "lock_mouse", "sound"):
+        value = bool(values.get(key, getattr(config, key)))
+        if value != getattr(config, key):
+            changes[key] = value
+
+    return (changes if not errors else {}), errors
+
+
+def update_config_file(path: Path, changes: Dict[str, Any]) -> None:
+    """Write *changes* into the settings file, keeping everything else (and notes) as is.
+
+    Raises ``OSError``/``ValueError`` if the file can't be read or written.
+    """
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8-sig"))
+        if not isinstance(raw, dict):
+            raise ValueError("the settings file is not a JSON object")
+    except FileNotFoundError:
+        raw = {**_HEADER, **asdict(Config())}
+    raw.update(changes)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(raw, indent=2) + "\n", encoding="utf-8")
+    os.replace(tmp, path)
+
+
 def save_config(config: Config, path: Path) -> None:
     """Write settings atomically (a crash mid-write can't corrupt the file)."""
     path.parent.mkdir(parents=True, exist_ok=True)
