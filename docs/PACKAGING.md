@@ -5,6 +5,8 @@ double-clickable app with [PyInstaller](https://pyinstaller.org), and covers rel
 code signing, antivirus false positives, shortcuts and start-at-login.
 
 - [Quick build](#quick-build)
+- [The Windows installer](#the-windows-installer)
+- [The macOS disk image](#the-macos-disk-image)
 - [Step by step, per OS](#step-by-step-per-os)
 - [What the spec file does](#what-the-spec-file-does)
 - [Automated releases with GitHub Actions](#automated-releases-with-github-actions)
@@ -19,19 +21,46 @@ code signing, antivirus false positives, shortcuts and start-at-login.
 python -m venv .venv
 # Windows: .venv\Scripts\activate    macOS/Linux: source .venv/bin/activate
 pip install -r requirements-dev.txt
-python scripts/build.py --archive
+python scripts/build.py --archive --installer
 ```
 
-| OS | Output | Archive for sharing |
-|---|---|---|
-| Windows | `dist/PawLock.exe` | `dist/PawLock-<version>-windows-x64.zip` |
-| macOS | `dist/PawLock.app` | `dist/PawLock-<version>-macos-arm64.zip` |
-| Linux | `dist/PawLock` | `dist/PawLock-<version>-linux-x64.tar.gz` |
+| OS | App | `--archive` | `--installer` (what to give non-technical users) |
+|---|---|---|---|
+| Windows | `dist/PawLock.exe` | `PawLock-<v>-windows-x64.zip` | **`PawLock-Setup-<v>.exe`** |
+| macOS | `dist/PawLock.app` | `PawLock-<v>-macos-arm64.zip` | **`PawLock-<v>-macos-arm64.dmg`** |
+| Linux | `dist/PawLock` | `PawLock-<v>-linux-x64.tar.gz` | – |
 
 `scripts/build.py` regenerates the icons if needed, runs `pyinstaller pawlock.spec
---noconfirm --clean`, checks the output exists, and (with `--archive`) packs it in the
-right format for each OS. PyInstaller **cannot cross-compile**: build on each OS you want
-to ship for.
+--noconfirm --clean`, checks the output exists, then (with `--archive`) packs it in the
+right format for each OS and (with `--installer`) builds the installer. PyInstaller
+**cannot cross-compile**: build on each OS you want to ship for.
+
+## The Windows installer
+
+[`packaging/windows/PawLock.iss`](../packaging/windows/PawLock.iss) is an
+[Inno Setup 6](https://jrsoftware.org/isinfo.php) script. Install Inno Setup
+(`winget install JRSoftware.InnoSetup`), then `python scripts/build.py --installer`.
+`build.py` finds `ISCC.exe` and passes the version in. The installer is designed so a
+non-technical user only clicks *Next* and *Finish*:
+
+| What | How |
+|---|---|
+| No administrator password | `PrivilegesRequired=lowest`: installs to `%LOCALAPPDATA%\Programs\PawLock` |
+| Short wizard | Welcome (explains PawLock and the shortcut) → Options → Finish; no folder or "ready to install" pages |
+| Options | **Start PawLock when I sign in** (ticked) and **desktop icon** (unticked) |
+| Start menu | *PawLock*, and *Stop PawLock* (`--stop`), the one-click emergency exit |
+| Finish page | *Start PawLock now* (ticked) → the welcome window opens |
+| Upgrades | the installer runs `PawLock.exe --stop --quiet` first, so a running copy never blocks the update |
+| Uninstall | *Settings → Apps → PawLock*; stops PawLock and removes the start-at-login entry, even if it was switched on later from inside PawLock |
+
+Silent install for IT folks: `PawLock-Setup-<v>.exe /VERYSILENT /MERGETASKS="autostart,!desktopicon"`.
+The release workflow installs Inno Setup on the Windows build machine with Chocolatey.
+
+## The macOS disk image
+
+On macOS `--installer` creates `PawLock-<v>-macos-<arch>.dmg` with `hdiutil`: a disk image
+containing `PawLock.app` next to a shortcut to *Applications*. Users drag one onto the
+other, the familiar Mac way.
 
 ## Step by step, per OS
 
@@ -149,6 +178,9 @@ PawLock has no network code and never records keystrokes, so you can check exact
 the hook does in `pawlock/backends/` and `pawlock/engine.py`.
 
 ## Shortcuts for users
+
+The Windows installer already creates *PawLock* and *Stop PawLock* in the Start menu. For
+the portable `.exe`, you can make them yourself:
 
 **Emergency stop button (Windows):** right-click the desktop → *New → Shortcut* → browse to
 `PawLock.exe` → *Next* → name it "Stop PawLock" → *Finish*. Then right-click the shortcut →

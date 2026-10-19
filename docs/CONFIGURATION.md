@@ -1,5 +1,10 @@
 # Configuration
 
+> **Most people never need this page.** Click the tray paw and open the **Settings** tab:
+> the shortcut letter, unlock word, cat detection, away mode, mouse locking, sounds and
+> start-at-login are all plain checkboxes and lists there. This page documents the file
+> behind them, including advanced options the window doesn't show.
+
 PawLock stores its settings in a small JSON file, created with defaults the first time it
 runs.
 
@@ -12,8 +17,9 @@ runs.
 `pawlock --where` prints the exact path. Set the `PAWLOCK_HOME` environment variable to
 keep settings, logs and the PID file somewhere else (e.g. a USB stick for a portable copy).
 
-**Editing:** tray → *Edit settings…*, save, then tray → *Reload settings*. Changes to
-`tray`, `overlay` and `backend` need a restart; everything else applies on reload.
+**Editing the file:** tray → *Advanced → Edit settings file…*, save, then
+*Advanced → Reload settings file*. Changes to `tray`, `overlay` and `backend` need a
+restart; everything else applies on reload.
 
 **Mistakes are safe.** Every value is validated. An invalid value is replaced by its
 default and reported in the log; it never stops PawLock from starting. If the whole

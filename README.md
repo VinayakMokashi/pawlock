@@ -63,7 +63,8 @@
 | 🛟 | **Six layers of safety** | Fail-open design, crash guards, watchdog, optional time limit, a `--stop` kill switch and the OS's own escape hatches. A bug can't leave you without a keyboard. |
 | 🧷 | **No stuck keys** | Releases of keys you were already holding are always delivered, so Ctrl/Shift/mouse buttons never get stuck "down". |
 | 🧪 | **Dry-run & practice modes** | See what *would* be locked without blocking anything, or practise unlocking in a session that releases itself after 30 s. |
-| 📦 | **One-file app** | Download, double-click, done. Builds for Windows, macOS and Linux via PyInstaller. |
+| 🪟 | **Made for everyone** | A Next → Finish installer, a welcome window that explains everything, a *Try it* button, and a Settings page with plain checkboxes. No command line, no settings files. |
+| 📦 | **Installer or one-file app** | Windows installer (no admin password) or a portable `.exe`; a drag-to-Applications `.dmg` for Mac; a single binary for Linux. Built with PyInstaller. |
 | 🙈 | **Private** | Never records, stores or sends what you type. No network access at all. |
 
 <p align="center">
@@ -78,17 +79,28 @@ Go to the **[latest release](https://github.com/VinayakMokashi/pawlock/releases/
 
 ### Windows 10 / 11
 
-1. Download **`PawLock-…-windows-x64.zip`**, right-click it and choose **Extract All**.
-2. Move `PawLock.exe` somewhere permanent, for example `Documents\PawLock`.
-3. Double-click **PawLock.exe**.
-   *If you see "Windows protected your PC", click **More info → Run anyway**. The app isn't code-signed (signing costs money), but the source is all here.*
-4. A green paw appears in the system tray (bottom-right; click **^** if it's hidden).
-5. **Try it safely:** right-click the paw → **Practice lock (30 s)**, then press **Ctrl + Alt + Shift + L** to unlock.
-6. Optional: right-click the paw → **Start at login**.
+1. Download **`PawLock-Setup-….exe`** and double-click it.
+   *If you see "Windows protected your PC", click **More info → Run anyway**. The app isn't
+   code-signed (signing costs money), but the source is all here.*
+2. Click **Next**, leave **Start PawLock automatically when I sign in** ticked, then
+   **Finish**. No administrator password needed.
+3. The PawLock window opens and explains everything. Press **Try it** to practise: the
+   computer locks for 30 seconds, and you unlock it with **Ctrl + Alt + Shift + L**.
+
+That's it. The green paw next to the clock means you're protected. **Uninstall** any time
+from *Settings → Apps → PawLock*. The Start menu also has an emergency **Stop PawLock**.
+
+<p align="center">
+  <img src="docs/images/window-how-to-use.png" width="620" alt="The PawLock window: How to use page with the shortcut shown as keys Ctrl + Alt + Shift + L, and buttons Try it (30-second practice) and Lock now">
+</p>
+
+*Prefer no installer?* Download `PawLock-…-windows-x64.zip` instead, extract it and
+double-click `PawLock.exe` (same app, portable).
 
 ### macOS (Apple Silicon)
 
-1. Download **`PawLock-…-macos-arm64.zip`**, double-click to unzip, and drag **PawLock.app** into **Applications**.
+1. Download **`PawLock-…-macos-arm64.dmg`**, open it, and drag **PawLock** onto the
+   **Applications** folder next to it.
 2. The first time, **right-click PawLock.app → Open → Open** (the app isn't notarised by Apple).
 3. macOS will ask for permission. Open **System Settings → Privacy & Security** and switch PawLock on under **both**
    - **Accessibility**, and
@@ -119,11 +131,27 @@ PawLock needs an **X11/Xorg session**. Wayland deliberately blocks global input 
 |---|---|---|
 | **Lock or unlock** | `Ctrl + Alt + Shift + L` | `Control + Option + Shift + L` |
 | **Unlock (backup)** | type `unlock` | type `unlock` |
-| **Lock from the tray** | click the paw, or right-click → **Lock now** | menu-bar paw → **Lock now** |
-| **Practise safely** | tray → **Practice lock (30 s)** | same |
+| **Lock with the mouse** | click the paw → **Lock now** | menu-bar paw → **Lock now** |
+| **Practise safely** | click the paw → **Try it** | menu-bar paw → **Practice lock (30 s)** |
+| **Change settings** | click the paw → **Settings** tab | menu-bar paw → **Settings…** |
 
 Press the modifiers first and `L` last, the way you'd press any shortcut. Nothing you
 type while locked (including the hotkey and the unlock word) ever reaches your apps.
+
+### The PawLock window
+
+Clicking the tray paw (or opening PawLock from the Start menu while it's already running)
+opens the PawLock window. **How to use** explains everything on one page. **Settings**
+replaces the settings file with plain controls, and changes apply as soon as you press
+**Save**:
+
+<p align="center">
+  <img src="docs/images/window-settings.png" width="620" alt="PawLock Settings page: shortcut letter, unlock word, away mode minutes, cat detection level, lock mouse, sounds, start at login">
+</p>
+
+Closing the window keeps PawLock running in the background. On a Mac, PawLock lives in
+the menu bar, and *Settings…* opens the settings file
+(the window is available with `"overlay": true`; see [Troubleshooting](docs/TROUBLESHOOTING.md#macos)).
 
 ### What you'll see
 
@@ -135,11 +163,14 @@ You'll also hear three falling tones when PawLock locks (a short chirp first if 
 was detected) and three rising tones when it unlocks. The tray paw turns **red** while
 locked. The banner never takes keyboard focus and clicks pass straight through it.
 
-### The tray menu
+### The tray menu (right-click the paw)
 
-`Lock now` · `Practice lock (30 s)` · `Unlock` · `Detect cats automatically ✓` ·
-`Lock when I'm away (10 min) ✓` · `Sound effects ✓` · `Start at login` · `Edit settings…` ·
-`Reload settings` · `Open log folder` · `Quit PawLock`
+`Open PawLock` · `Lock now` · `Practice lock (30 s)` · `Unlock` · `Detect cats automatically ✓` ·
+`Lock when I'm away (10 min) ✓` · `Sound effects ✓` · `Start at login` · `Settings…` ·
+`How to use PawLock` · `Advanced ▸` (settings file, reload, logs) · `Quit PawLock`
+
+On Windows 11, PawLock puts its paw next to the clock the first time it runs, rather than
+hidden behind the **^** arrow.
 
 ---
 
@@ -199,7 +230,7 @@ independent safety nets ([details](docs/SAFETY.md)):
 
 **Emergency exits, if you ever need them:**
 
-- **Windows:** `Ctrl + Alt + Del` can never be blocked. Choose *Task Manager*, select *PawLock* and click **End task**.
+- **Windows:** `Ctrl + Alt + Del` can never be blocked. Choose *Task Manager*, select *PawLock* and click **End task**. (The Start menu's **Stop PawLock** does the same in one click.)
 - **macOS:** from another device, `ssh you@your-mac pawlock --stop`, or set `max_lock_minutes`. Worst case, hold the power button.
 - **Linux:** `Ctrl + Alt + F3` (switch to a text console), log in, run `pkill -f -i pawlock`, then `Ctrl + Alt + F2`/`F7` to go back.
 - **Anywhere:** `PawLock --stop` (or `python -m pawlock --stop`) from a terminal or a desktop shortcut.
@@ -251,8 +282,9 @@ A cat can type a few characters before it's caught, but no more. Tune with
 
 ## Settings
 
-Right-click the paw → **Edit settings…** opens `config.json` in your text editor. Save it,
-then choose **Reload settings**.
+The easy way: click the paw → **Settings** tab (see [the PawLock window](#the-pawlock-window)).
+Every option, including advanced ones, also lives in a small `config.json` file: right-click
+the paw → **Advanced → Edit settings file…**, save, then **Advanced → Reload settings file**.
 
 | Setting | Default | What it does |
 |---|---|---|
@@ -326,13 +358,13 @@ On macOS, give your **Terminal** the Accessibility and Input Monitoring permissi
 
 ```bash
 pip install -r requirements-dev.txt
-python scripts/build.py --archive
+python scripts/build.py --archive --installer
 ```
 
 | OS | Result |
 |---|---|
-| Windows | `dist/PawLock.exe` (one file, no console window) + `dist/PawLock-<ver>-windows-x64.zip` |
-| macOS | `dist/PawLock.app` (menu-bar app, no Dock icon) + `.zip` |
+| Windows | `dist/PawLock.exe` (one file, no console window), `dist/PawLock-<ver>-windows-x64.zip`, and `dist/PawLock-Setup-<ver>.exe`, the installer (`--installer` needs [Inno Setup 6](https://jrsoftware.org/isdl.php)) |
+| macOS | `dist/PawLock.app` (menu-bar app, no Dock icon), `.zip`, and a drag-to-Applications `.dmg` |
 | Linux | `dist/PawLock` (one file) + `.tar.gz` |
 
 PyInstaller can't cross-compile, so build on each OS, or push a `v*` tag and let the
@@ -445,18 +477,19 @@ pawlock/
 │   ├── idle.py            OS idle time for away mode (Windows / macOS / X11)
 │   ├── keys.py            one key vocabulary for all OSes + keyboard geometry
 │   ├── backends/          windows.py · macos.py · swap.py (Linux) on top of pynput
-│   ├── feedback/          tray.py · overlay.py · sound.py · icons.py
+│   ├── feedback/          window.py (the PawLock window) · tray.py · overlay.py · sound.py · icons.py
 │   ├── safety.py          watchdog, crash guards, signal handlers
 │   ├── instance.py        single instance + the --stop kill switch
 │   ├── autostart.py       "Start at login" for Windows/macOS/Linux
 │   ├── config.py          self-healing JSON settings
 │   ├── doctor.py          --doctor health check
 │   └── simulate.py        synthetic humans and cats for tests and benchmarks
-├── tests/                 280+ tests, no real input devices needed
+├── tests/                 290 tests, no real input devices needed
 ├── scripts/               build.py · make_icons.py · detector_benchmark.py · capture_screenshots.py
 ├── docs/                  how it works, detection, safety, configuration, packaging, troubleshooting
 ├── assets/                app icons (generated by scripts/make_icons.py)
 ├── pawlock.spec           PyInstaller recipe
+├── packaging/windows/     PawLock.iss: the Windows installer (Inno Setup)
 └── .github/workflows/     CI (3 OSes) and release builds
 ```
 
@@ -469,7 +502,7 @@ Please attach the output of `pawlock --doctor` to bug reports.
 
 ```bash
 pip install -r requirements-dev.txt
-pytest          # 280+ tests, run anywhere (no keyboard hooks are installed)
+pytest          # 290 tests, run anywhere (no keyboard hooks are installed)
 ruff check .
 ```
 

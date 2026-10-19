@@ -64,7 +64,9 @@ in the tray.
 
 | Symptom | Cause & fix |
 |---|---|
-| "Windows protected your PC" | The app isn't code-signed. *More info → Run anyway.* |
+| "Windows protected your PC" (installer or app) | The app isn't code-signed. *More info → Run anyway.* |
+| I can't find PawLock | Start menu → *PawLock*. If it's already running, that opens its window. The paw lives next to the clock (or behind the **^** arrow). |
+| How do I uninstall? | *Settings → Apps → Installed apps → PawLock → Uninstall*. Your settings stay in `%APPDATA%\PawLock` (delete that folder too for a clean slate). |
 | Antivirus quarantined PawLock.exe | False positive caused by the global keyboard hook + PyInstaller; see [PACKAGING.md](PACKAGING.md#antivirus-false-positives). Restore it and add an exclusion, or run from source. |
 | Keys still reach one particular window | That window runs **as administrator**. Windows hides elevated windows' input from normal apps, so run PawLock as administrator too. |
 | `Ctrl+Alt+Del`, `Win+L` still work while locked | By design: Windows doesn't let any app block them. That's your emergency exit. |
@@ -79,7 +81,8 @@ in the tray.
 | Permissions are on but still nothing | After updating/rebuilding, macOS treats it as a new app: remove PawLock from both lists with **–**, add it again, restart it. |
 | "PawLock can't be opened" | Not notarised: right-click → *Open*, or *Privacy & Security → Open Anyway*. |
 | Pinch / swipe gestures still work | Gesture events aren't part of the event taps pynput installs. Clicks, taps, movement and scrolling are blocked. |
-| Crash on start when the banner is enabled | Tk and pynput's event tap don't always coexist on recent macOS. The banner is off by default on macOS; keep `"overlay": false`. |
+| Crash on start when the banner is enabled | Tk and pynput's event tap don't always coexist on recent macOS. The banner (and with it the PawLock window) is off by default on macOS; keep `"overlay": false` and use the menu-bar paw. |
+| No PawLock window on a Mac | Same reason as above: on macOS the window is only available with `"overlay": true`. The menu-bar paw has every switch, and *Settings…* opens the settings file. |
 | Hotkey letter seems to be "wrong" on a non-US layout | macOS key codes are positional: the hotkey uses the key in the US "L" position. Pick a hotkey based on where the key physically is, or use an F-key. |
 
 <h2 id="linux-wayland">Linux / Wayland</h2>
