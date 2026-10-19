@@ -107,8 +107,11 @@ def test_simple_settings_defaults():
 
 
 def test_custom_hotkey_is_flagged():
+    from pawlock.hotkey import Hotkey
+
     values = simple_settings(Config(hotkey="ctrl+alt+k"))
-    assert values["letter"] == "" and values["custom_hotkey"] == "Ctrl + Alt + K"
+    assert values["letter"] == ""
+    assert values["custom_hotkey"] == Hotkey.parse("ctrl+alt+k").display()  # "Control + Option + K" on a Mac
 
 
 def test_unchanged_form_changes_nothing():
